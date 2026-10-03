@@ -378,11 +378,11 @@ assert pr["sequence"] == {"index": 1, "name": "Verse", "tempo": 93.5, "tempo_ena
                           "loop_start": 4, "loop_end": 8, "beats_per_bar": 3, "beat_length": 960}, pr["sequence"]
 tr = pr["tracks"]
 assert [t["name"] for t in tr] == ["Drums", "Keys & Pads", "Muted Seq", "Return 1", "Submix 1", "Out 1/2", "Mystery"], tr
-assert [t["type"] for t in tr] == ["drum", "plugin", "plugin", "return", "submix", "output", "other"], tr
+assert [t["type"] for t in tr] == ["drum", "plugin", "plugin", "return", "submix", "output", "audio"], tr
 assert tr[1]["plugin"] == {"name": "Chordsmith", "vendor": "jacob-sabella", "format": "VST", "file": "/storage/Synths/x/x.so",
                            "preset": "Lydian Pad"} and tr[1]["solo"] and tr[1]["record_arm"] and tr[1]["volume"] == 0.45, tr[1]
 assert tr[2]["mute"] and tr[2]["track_mute"] and tr[2]["plugin"]["name"] == "Fake Synth" and tr[0]["plugin"] is None, tr
-assert tr[6]["kind"] == 5 and tr[6]["volume"] == 0.1, tr[6]
+assert tr[6]["kind"] == 6 and tr[6]["volume"] == 0.1, tr[6]
 doc = json.load(urllib.request.urlopen("http://127.0.0.1:%d/project" % PORT))
 assert doc == pr, doc
 assert pr["mtime"] > 0

@@ -145,6 +145,7 @@ static const char *track_type(int kind)
     switch (kind) {   // program.type values seen in project files; the rest are reported by number only
     case 0: return "drum";
     case 3: return "plugin";
+    case 6: return "audio";
     case 7: return "return";
     case 8: return "submix";
     case 9: return "output";

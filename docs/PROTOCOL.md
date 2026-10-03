@@ -71,8 +71,8 @@ real-time commands. For the app to follow MPC, enable the port as a MIDI output 
 The file is the most recent project in MPC's settings (`recentProject1` in `settings=`), or `project=` when set. It
 is what MPC last saved or loaded, not the live state: the app shows it as the project and refreshes it on request.
 `tempo` is the master tempo when that is enabled, else the current sequence's. `kind` is the program type number
-in the file; `type` names the ones seen so far (`drum` 0, `plugin` 3, `return` 7, `submix` 8, `output` 9, `input`
-10, else `other`). `mute`, `solo`, `volume` and `pan` are the mixer's; `track_mute` is the sequencer track's.
+in the file; `type` names the ones seen so far (`drum` 0, `plugin` 3, `audio` 6, `return` 7, `submix` 8, `output` 9,
+`input` 10, else `other`). `mute`, `solo`, `volume` and `pan` are the mixer's; `track_mute` is the sequencer track's.
 `plugin` is `null` for a track without one. A missing or unreadable file is an `error` message (HTTP: 404).
 
 ## HTTP

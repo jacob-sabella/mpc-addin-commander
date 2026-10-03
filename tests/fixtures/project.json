@@ -270,7 +270,7 @@
     "program": {
      "version": 6,
      "name": "Mystery",
-     "type": 5,
+     "type": 6,
      "mixable": {
       "version": 1,
       "volume": 0.1,
