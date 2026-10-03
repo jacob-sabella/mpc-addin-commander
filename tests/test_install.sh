@@ -11,16 +11,16 @@ SH="sh"; BB="${BUSYBOX:-$(command -v busybox || true)}"; [ -n "$BB" ] && SH="$BB
 T=$(mktemp -d); trap 'rm -rf "$T"' EXIT
 mkdir -p "$T/pkg" "$T/root/usr/lib/systemd/system"
 cp "$INST/install.sh" "$INST/uninstall.sh" "$INST/addin-lib.sh" addin.manifest "$T/pkg/"
-cp mpc_commander_addin.conf "$T/pkg/"; echo so > "$T/pkg/mpc_commander_addin.so"
+cp mpc_commander_addin.conf "$T/pkg/"; printf '\177ELF\001\001\001\000\000\000\000\000\000\000\000\000\003\000\050\000so' > "$T/pkg/mpc_commander_addin.so"   # an ARM shared object's header: install.sh checks it
 U="$T/root/usr/lib/systemd/system/acvs.service"
 printf '[Service]\nEnvironment=LD_PRELOAD=/usr/lib/x.so\nExecStart=/usr/bin/az01-launch-MPC\n' > "$U"
-run() { ADDIN_INSTALL_TEST=1 SYSTEMD_ROOT="$T/root" $SH "$T/pkg/$1" -y -t "$T/addin" > "$T/out" 2>&1 || { cat "$T/out"; exit 1; }; }
+run() { ADDIN_INSTALL_TEST=1 SYSTEMD_ROOT="$T/root" $SH "$T/pkg/$1" -y -t "$T/commander" > "$T/out" 2>&1 || { cat "$T/out"; exit 1; }; }
 fail() { echo "FAIL installer: $1"; exit 1; }
 run install.sh
-grep -qx "Environment=LD_PRELOAD=/usr/lib/x.so:$T/addin/mpc_commander_addin.so" "$U" || fail "LD_PRELOAD: $(grep Env "$U")"
-grep -q "port=" "$T/addin/mpc_commander_addin.conf" && grep -q ":6730" "$T/out" || fail "files"
-echo "port=9000" > "$T/addin/mpc_commander_addin.conf"; run install.sh
-grep -qx "port=9000" "$T/addin/mpc_commander_addin.conf" || fail "settings not kept"
-ADDIN_INSTALL_TEST=1 SYSTEMD_ROOT="$T/root" $SH "$T/addin/uninstall.sh" -y -t "$T/addin" > "$T/out" 2>&1 || { cat "$T/out"; exit 1; }
-grep -qx "Environment=LD_PRELOAD=/usr/lib/x.so" "$U" && [ ! -e "$T/addin" ] || fail "uninstall"
+grep -qx "Environment=LD_PRELOAD=/usr/lib/x.so:$T/commander/mpc_commander_addin.so" "$U" || fail "LD_PRELOAD: $(grep Env "$U")"
+grep -q "port=" "$T/commander/mpc_commander_addin.conf" && grep -q ":6730" "$T/out" || fail "files"
+echo "port=9000" > "$T/commander/mpc_commander_addin.conf"; run install.sh
+grep -qx "port=9000" "$T/commander/mpc_commander_addin.conf" || fail "settings not kept"
+ADDIN_INSTALL_TEST=1 SYSTEMD_ROOT="$T/root" $SH "$T/commander/uninstall.sh" -y -t "$T/commander" > "$T/out" 2>&1 || { cat "$T/out"; exit 1; }
+grep -qx "Environment=LD_PRELOAD=/usr/lib/x.so" "$U" && [ ! -e "$T/commander" ] || fail "uninstall"
 echo "ok   installer: install, reinstall keeps settings, uninstall from the installed folder"
