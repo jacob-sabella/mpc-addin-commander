@@ -73,6 +73,8 @@ pub enum ClientMessage {
     Midi { bytes: Vec<u8> },
     /// Ask for a fresh `project` snapshot.
     Project,
+    /// Append these bytes to the device's control-surface injector file.
+    Surface { bytes: Vec<u8> },
 }
 
 /// The `hello` message.
@@ -228,10 +230,54 @@ pub struct Project {
     pub name: String,
     #[serde(default)]
     pub path: String,
+    /// The file's modification time, Unix seconds.
+    #[serde(default)]
+    pub mtime: u64,
+    #[serde(default)]
+    pub key: String,
+    /// The master tempo when that is enabled, else the current sequence's.
     #[serde(default)]
     pub tempo: Option<f32>,
     #[serde(default)]
+    pub master_tempo: Option<f32>,
+    #[serde(default)]
+    pub master_tempo_enabled: bool,
+    /// The selected track's `index`.
+    #[serde(default)]
+    pub current_track: Option<u32>,
+    #[serde(default)]
+    pub sequence: Option<Sequence>,
+    #[serde(default)]
     pub tracks: Vec<Track>,
+}
+
+/// The current sequence of a project snapshot.
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
+pub struct Sequence {
+    #[serde(default)]
+    pub index: u32,
+    #[serde(default)]
+    pub name: String,
+    #[serde(default)]
+    pub tempo: Option<f32>,
+    #[serde(default)]
+    pub tempo_enabled: bool,
+    /// The length in bars.
+    #[serde(default)]
+    pub bars: u32,
+    #[serde(default)]
+    pub r#loop: bool,
+    /// The loop's first bar, 0-based.
+    #[serde(default)]
+    pub loop_start: u32,
+    /// The bar after the loop, 0-based.
+    #[serde(default)]
+    pub loop_end: u32,
+    #[serde(default)]
+    pub beats_per_bar: Option<u32>,
+    /// Ticks per beat.
+    #[serde(default)]
+    pub beat_length: Option<u32>,
 }
 
 /// One track of a project snapshot.
@@ -241,9 +287,21 @@ pub struct Track {
     pub index: u32,
     #[serde(default)]
     pub name: String,
-    /// The track type as the project file names it.
+    /// The program type number in the file.
+    #[serde(default)]
+    pub kind: Option<u32>,
+    /// The program type's name (`drum`, `plugin`, `audio`, ..., `other`).
     #[serde(rename = "type", default)]
-    pub kind: String,
+    pub type_name: String,
+    /// `0xRRGGBB`.
+    #[serde(default)]
+    pub colour: Option<u32>,
+    /// The sequencer track's mute.
+    #[serde(default)]
+    pub track_mute: bool,
+    #[serde(default)]
+    pub record_arm: bool,
+    /// The mixer's mute.
     #[serde(default)]
     pub mute: bool,
     #[serde(default)]
@@ -254,7 +312,23 @@ pub struct Track {
     pub pan: f32,
     /// The plugin on the track, if any.
     #[serde(default)]
-    pub plugin: Option<String>,
+    pub plugin: Option<TrackPlugin>,
+}
+
+/// The plugin on a project track.
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
+pub struct TrackPlugin {
+    #[serde(default)]
+    pub name: String,
+    #[serde(default)]
+    pub vendor: String,
+    /// `VST`, or `MPC` for Akai's own instruments.
+    #[serde(default)]
+    pub format: String,
+    #[serde(default)]
+    pub file: String,
+    #[serde(default)]
+    pub preset: String,
 }
 
 #[cfg(test)]
@@ -324,7 +398,7 @@ mod tests {
             tracks: vec![Track {
                 index: 0,
                 name: "Drums".into(),
-                kind: "drum".into(),
+                type_name: "drum".into(),
                 plugin: None,
                 ..Default::default()
             }],
@@ -347,6 +421,7 @@ mod tests {
         });
         roundtrip_client(&ClientMessage::Midi { bytes: vec![0xf8] });
         roundtrip_client(&ClientMessage::Project);
+        roundtrip_client(&ClientMessage::Surface { bytes: vec![1, 2] });
     }
 
     #[test]

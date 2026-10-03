@@ -1,3 +1,11 @@
-{"t": "project", "name": "Demo", "path": "/storage/Projects/Demo.xpj", "tempo": 92.5,
- "tracks": [{"index": 0, "name": "Drums", "type": "drum", "mute": false, "solo": false, "volume": 0.8, "pan": 0.5, "plugin": null},
-            {"index": 1, "name": "Keys", "type": "plugin", "mute": true, "solo": false, "volume": 0.7, "pan": 0.4, "plugin": "Chordsmith"}]}
+{"t": "project", "path": "/storage/MPC Documents/Projects/Jam 1.xpj", "name": "Jam 1", "mtime": 1759500000,
+ "version": 28, "key": "C Major", "master_tempo": 128.0, "master_tempo_enabled": false, "tempo": 93.5,
+ "current_track": 1,
+ "sequence": {"index": 1, "name": "Verse", "tempo": 93.5, "tempo_enabled": true, "bars": 8, "loop": true,
+              "loop_start": 4, "loop_end": 8, "beats_per_bar": 4, "beat_length": 960},
+ "tracks": [{"index": 0, "name": "Drums", "kind": 0, "type": "drum", "colour": 16711680, "track_mute": false,
+             "record_arm": false, "mute": false, "solo": false, "volume": 0.8, "pan": 0.5, "plugin": null},
+            {"index": 1, "name": "Keys", "kind": 3, "type": "plugin", "colour": 1179392, "track_mute": false,
+             "record_arm": true, "mute": true, "solo": false, "volume": 0.45, "pan": 0.5,
+             "plugin": {"name": "Chordsmith", "vendor": "jacob-sabella", "format": "VST",
+                        "file": "/storage/Synths/x/x.so", "preset": "Lydian Pad"}}]}

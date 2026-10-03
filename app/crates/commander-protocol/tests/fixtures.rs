@@ -19,7 +19,7 @@ fn fixtures() -> Vec<(String, String)> {
         })
         .collect();
     out.sort();
-    assert!(out.len() >= 17, "fixtures missing: {}", out.len());
+    assert!(out.len() >= 18, "fixtures missing: {}", out.len());
     out
 }
 
@@ -101,9 +101,19 @@ fn fixture_values() {
     match serde_json::from_str(&get("server_project.json")).unwrap() {
         ServerMessage::Project(p) => {
             assert_eq!(p.tracks.len(), 2);
-            assert_eq!(p.tracks[1].kind, "plugin");
-            assert_eq!(p.tracks[1].plugin.as_deref(), Some("Chordsmith"));
+            assert_eq!(p.tracks[1].type_name, "plugin");
+            assert_eq!(p.tracks[1].kind, Some(3));
+            let plugin = p.tracks[1].plugin.as_ref().unwrap();
+            assert_eq!(
+                (plugin.name.as_str(), plugin.preset.as_str()),
+                ("Chordsmith", "Lydian Pad")
+            );
+            assert!(p.tracks[1].record_arm && p.tracks[1].mute);
             assert_eq!(p.tracks[0].plugin, None);
+            assert_eq!(p.current_track, Some(1));
+            let seq = p.sequence.unwrap();
+            assert_eq!((seq.bars, seq.loop_start, seq.loop_end), (8, 4, 8));
+            assert_eq!(seq.beats_per_bar, Some(4));
         }
         other => panic!("{other:?}"),
     }

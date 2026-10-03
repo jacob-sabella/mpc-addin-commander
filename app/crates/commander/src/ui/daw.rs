@@ -81,7 +81,7 @@ pub fn track_list(ui: &mut egui::Ui, snap: &Snapshot) {
                 ui.horizontal(|ui| {
                     ui.label(RichText::new(format!("{:>2}", tr.index + 1)).monospace());
                     ui.label(RichText::new(&tr.name).strong());
-                    ui.label(RichText::new(&tr.kind).color(theme::SUBTEXT).size(11.0));
+                    ui.label(RichText::new(&tr.type_name).color(theme::SUBTEXT).size(11.0));
                     if tr.mute {
                         ui.label(RichText::new("M").strong().color(theme::YELLOW));
                     }
@@ -93,7 +93,7 @@ pub fn track_list(ui: &mut egui::Ui, snap: &Snapshot) {
                     bar(ui, "vol", tr.volume, theme::TEAL);
                     bar(ui, "pan", tr.pan, theme::BLUE);
                     if let Some(plugin) = &tr.plugin {
-                        ui.label(RichText::new(plugin).color(theme::MAUVE).size(11.0));
+                        ui.label(RichText::new(&plugin.name).color(theme::MAUVE).size(11.0));
                     }
                 });
                 ui.add_space(4.0);
