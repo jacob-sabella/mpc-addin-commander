@@ -58,9 +58,10 @@ static void push_midi_in(const struct midi_msg *m, long long at)
 // are the frame rate (24, 25, 29.97 drop, 30). The position in clocks needs the tempo; -1 while it is unknown.
 static long locate_clocks(const struct midi_msg *m)
 {
-    if (m->len != 13 || m->b[1] != 0x7F || m->b[3] != 0x06 || m->b[4] != 0x44 || m->b[5] != 0x06 || m->b[6] != 0x01) return -1;
+    // MPC sends the short form, with no sub-frame byte (F0 7F 00 06 44 06 01 hh mm ss ff F7), the full form has one.
+    if ((m->len != 12 && m->len != 13) || m->b[1] != 0x7F || m->b[3] != 0x06 || m->b[4] != 0x44 || m->b[5] != 0x06 || m->b[6] != 0x01) return -1;
     static const double fps[] = { 24, 25, 29.97, 30 };
-    double sec = (m->b[7] & 31) * 3600.0 + (m->b[8] & 63) * 60.0 + (m->b[9] & 63) + ((m->b[10] & 31) + (m->b[11] & 127) / 100.0) / fps[(m->b[7] >> 5) & 3];
+    double sec = (m->b[7] & 31) * 3600.0 + (m->b[8] & 63) * 60.0 + (m->b[9] & 63) + ((m->b[10] & 31) + (m->len == 13 ? (m->b[11] & 127) / 100.0 : 0)) / fps[(m->b[7] >> 5) & 3];
     if (T.tempo <= 0) return sec == 0 ? 0 : -1;
     return (long)(sec * T.tempo / 60.0 * CLOCKS_PER_BEAT + 0.5);
 }
@@ -75,7 +76,7 @@ static int is_mmc(const struct midi_msg *m)
 static int on_message(const struct midi_msg *m, long long at)
 {
     uint8_t st = m->b[0];
-    if (st == 0xF0 && m->len == 13) {
+    if (st == 0xF0 && (m->len == 12 || m->len == 13)) {
         pthread_mutex_lock(&lock);
         long c = locate_clocks(m);
         if (c >= 0) { T.clocks = c; T.source = "mmc"; }

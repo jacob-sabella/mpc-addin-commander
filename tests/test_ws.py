@@ -341,7 +341,8 @@ if FAKE_MIDI:
     t = ws.wait(lambda m: m["t"] == "transport" and m["bar"] == 2)   # 48 + 60 clocks: bar 2, beat 1
     assert 150 < t["tempo"] < 330, t
     # MMC locate: a time code position, turned into bars at the clock's tempo
-    midi_in([0xF0, 0x7F, 0x00, 0x06, 0x44, 0x06, 0x01, 0x20 | 0, 0, 3, 0, 0, 0xF7])   # 25 fps, 0:00:03.00
+    # MPC's own form has no sub-frame byte
+    midi_in([0xF0, 0x7F, 0x00, 0x06, 0x44, 0x06, 0x01, 0x20 | 0, 0, 3, 0, 0xF7])   # 25 fps, 0:00:03.00
     t = ws.wait(lambda m: m["t"] == "transport" and m["bar"] != 2)
     beats = 3 * t["tempo"] / 60   # at the tempo the addin had then
     assert abs((t["bar"] - 1) * 4 + (t["beat"] - 1) + t["tick"] / 960 - beats) < 0.05, (t, beats)
