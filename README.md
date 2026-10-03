@@ -24,8 +24,9 @@ Two halves:
 ASan+UBSan and TSan, the real `.so` preloaded into a process named `MPC`, the sequencer port where the build machine
 has one, the installer under BusyBox) and builds for armhf (glibc symbols up to 2.31). On an MPC Key 37 (software
 3.9.1.2): plugin instances, live values and edits, the MIDI port, MMC transport both ways and the project snapshot
-work, the app runs against it, and MPC moves its playhead to a locate from the app. Recording from the app is not
-verified yet.
+work, the app runs against it, MPC moves its playhead to a locate from the app, and record from the app puts MPC in
+record. MPC ignores transport while its New Project dialog is up, and it forgets Receive MMC across a restart unless
+the setting is saved (mpc-vst-plugins `docs/NOTES.md`).
 
 ## Install the addin
 
