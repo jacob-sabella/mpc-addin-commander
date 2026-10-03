@@ -4,6 +4,7 @@
 #include "project.h"
 #include "addin.h"
 #include <dlfcn.h>
+#include <pthread.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
@@ -16,7 +17,7 @@ static struct {
     int (*close)(void *);
 } Z;
 
-static int load_zlib(void)
+static int load_zlib_locked(void)
 {
     if (Z.open) return 0;
     void *lib = dlopen("libz.so.1", RTLD_NOW | RTLD_LOCAL);
@@ -28,6 +29,16 @@ static int load_zlib(void)
     Z.open = NULL;
     dlclose(lib);
     return -1;
+}
+
+// Every client thread can ask for the project at once: load zlib under a lock.
+static int load_zlib(void)
+{
+    static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
+    pthread_mutex_lock(&lock);
+    int r = load_zlib_locked();
+    pthread_mutex_unlock(&lock);
+    return r;
 }
 
 static void xml_unescape(char *s)
