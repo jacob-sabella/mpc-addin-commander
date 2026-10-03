@@ -1,0 +1,292 @@
+{
+ "data": {
+  "version": 28,
+  "key": "F# Minor",
+  "masterTempo": 128.0,
+  "masterTempoEnabled": false,
+  "currentSequence": 1,
+  "currentTrackIndex": 1,
+  "mixer": {
+   "volume": 0.7
+  },
+  "sequences": [
+   {
+    "key": 0,
+    "value": {
+     "name": "Sequence 01",
+     "bpm": 120.0,
+     "lengthBars": 4,
+     "loop": false,
+     "loopStartBar": 0,
+     "loopEndBar": 4,
+     "tempoEnable": true,
+     "timeSignatureTrack": {
+      "timeSignatures": [
+       {
+        "beatsPerBar": 4,
+        "beatLength": 960,
+        "barStart": 0
+       }
+      ]
+     }
+    }
+   },
+   {
+    "key": 1,
+    "value": {
+     "name": "Verse",
+     "bpm": 93.5,
+     "lengthBars": 8,
+     "loop": true,
+     "loopStartBar": 4,
+     "loopEndBar": 8,
+     "tempoEnable": true,
+     "timeSignatureTrack": {
+      "timeSignatures": [
+       {
+        "beatsPerBar": 3,
+        "beatLength": 960,
+        "barStart": 0
+       }
+      ]
+     }
+    }
+   }
+  ],
+  "tracks": [
+   {
+    "version": 6,
+    "name": "Drums",
+    "volume": 1.0,
+    "pan": 0.5,
+    "mute": false,
+    "colour": 1179392,
+    "program": {
+     "version": 6,
+     "name": "Drums",
+     "type": 0,
+     "mixable": {
+      "version": 1,
+      "volume": 0.51,
+      "mute": false,
+      "solo": false,
+      "pan": 0.5,
+      "sends": [
+       0,
+       0,
+       0,
+       0
+      ]
+     }
+    },
+    "recordArm": false
+   },
+   {
+    "version": 6,
+    "name": "Keys & Pads",
+    "volume": 1.0,
+    "pan": 0.5,
+    "mute": false,
+    "colour": 1179392,
+    "program": {
+     "version": 6,
+     "name": "Keys & Pads",
+     "type": 3,
+     "mixable": {
+      "version": 1,
+      "volume": 0.45,
+      "mute": false,
+      "solo": true,
+      "pan": 0.5,
+      "sends": [
+       0,
+       0,
+       0,
+       0
+      ]
+     },
+     "plugin": {
+      "version": 1,
+      "plugin": {
+       "version": 2,
+       "is64Bits": false,
+       "description": {
+        "version": 1,
+        "name": "Chordsmith",
+        "descriptiveName": "Chordsmith",
+        "pluginFormatName": "VST",
+        "category": "Synth",
+        "manufacturerName": "jacob-sabella",
+        "fileOrIdentifier": "/storage/Synths/x/x.so",
+        "uid": 1,
+        "isInstrument": true
+       },
+       "state": "",
+       "programNumber": 0,
+       "presetName": "Lydian Pad",
+       "presetEdited": false
+      }
+     }
+    },
+    "recordArm": true
+   },
+   {
+    "version": 6,
+    "name": "Muted Seq",
+    "volume": 1.0,
+    "pan": 0.5,
+    "mute": true,
+    "colour": 1179392,
+    "program": {
+     "version": 6,
+     "name": "Muted Seq",
+     "type": 3,
+     "mixable": {
+      "version": 1,
+      "volume": 0.3,
+      "mute": true,
+      "solo": false,
+      "pan": 0.5,
+      "sends": [
+       0,
+       0,
+       0,
+       0
+      ]
+     },
+     "plugin": {
+      "version": 1,
+      "plugin": {
+       "version": 2,
+       "is64Bits": false,
+       "description": {
+        "version": 1,
+        "name": "Fake Synth",
+        "descriptiveName": "Fake Synth",
+        "pluginFormatName": "VST",
+        "category": "Synth",
+        "manufacturerName": "jacob-sabella",
+        "fileOrIdentifier": "/storage/Synths/x/x.so",
+        "uid": 1,
+        "isInstrument": true
+       },
+       "state": "",
+       "programNumber": 0,
+       "presetName": "",
+       "presetEdited": false
+      }
+     }
+    },
+    "recordArm": false
+   },
+   {
+    "version": 6,
+    "name": "Return 1",
+    "volume": 1.0,
+    "pan": 0.5,
+    "mute": false,
+    "colour": 1179392,
+    "program": {
+     "version": 6,
+     "name": "Return 1",
+     "type": 7,
+     "mixable": {
+      "version": 1,
+      "volume": 0.7,
+      "mute": false,
+      "solo": false,
+      "pan": 0.5,
+      "sends": [
+       0,
+       0,
+       0,
+       0
+      ]
+     }
+    },
+    "recordArm": false
+   },
+   {
+    "version": 6,
+    "name": "Submix 1",
+    "volume": 1.0,
+    "pan": 0.5,
+    "mute": false,
+    "colour": 1179392,
+    "program": {
+     "version": 6,
+     "name": "Submix 1",
+     "type": 8,
+     "mixable": {
+      "version": 1,
+      "volume": 0.7,
+      "mute": false,
+      "solo": false,
+      "pan": 0.5,
+      "sends": [
+       0,
+       0,
+       0,
+       0
+      ]
+     }
+    },
+    "recordArm": false
+   },
+   {
+    "version": 6,
+    "name": "Out 1/2",
+    "volume": 1.0,
+    "pan": 0.5,
+    "mute": false,
+    "colour": 1179392,
+    "program": {
+     "version": 6,
+     "name": "Out 1/2",
+     "type": 9,
+     "mixable": {
+      "version": 1,
+      "volume": 0.7,
+      "mute": false,
+      "solo": false,
+      "pan": 0.5,
+      "sends": [
+       0,
+       0,
+       0,
+       0
+      ]
+     }
+    },
+    "recordArm": false
+   },
+   {
+    "version": 6,
+    "name": "Mystery",
+    "volume": 1.0,
+    "pan": 0.5,
+    "mute": false,
+    "colour": 1179392,
+    "program": {
+     "version": 6,
+     "name": "Mystery",
+     "type": 5,
+     "mixable": {
+      "version": 1,
+      "volume": 0.1,
+      "mute": false,
+      "solo": false,
+      "pan": 0.5,
+      "sends": [
+       0,
+       0,
+       0,
+       0
+      ]
+     }
+    },
+    "recordArm": false
+   }
+  ]
+ }
+}

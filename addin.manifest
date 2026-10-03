@@ -1,0 +1,7 @@
+# This addin, for the shared installer in mpc-vst-plugins (tools/release/addin; the keys are in its docs/ADDINS.md).
+ADDIN_ID=commander
+ADDIN_NAME="MPC Commander addin"
+ADDIN_SO=mpc_commander_addin.so
+ADDIN_CONF=mpc_commander_addin.conf
+ADDIN_FILES=""
+ADDIN_DONE="Connect the MPC Commander desktop app to <device address>:6730 (port and bind are in mpc_commander_addin.conf). For transport and MIDI, enable the MPC Commander port in MPC's MIDI preferences: as an input (with Receive MMC on) and as an output with clock sync and Send MMC."
