@@ -1,8 +1,8 @@
 # Build the addin for MPC OS and attach the zip to a DRAFT release, with mpc-vst-plugins' reusable workflow
-# Run it from the Actions tab or `gh workflow run release.yml -f version=<x.y.z>`, then publish the draft.
 # (its docs/ADDINS.md, "Releasing from CI"). mpc-vst-plugins is pinned to ONE commit in both places below, the same
 # one as in test.yml: the fork's addins branch (sd88me/mpc-vst-plugins#144) until it is upstream, where the workflow
 # checks it out from (a PR's commits are fetchable there). Point both at upstream once it is in.
+# Run it from the Actions tab or `gh workflow run release.yml -f version=<x.y.z>`, then publish the draft.
 name: Release
 
 on:
