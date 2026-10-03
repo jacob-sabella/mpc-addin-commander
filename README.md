@@ -13,7 +13,7 @@ Two halves:
   start/stop and MMC come in over it and become transport state, and the app's MIDI and transport commands go out
   over it into MPC. A project snapshot comes from the most recent project file. Nothing in MPC is patched; the
   stock instruments are internal to MPC and are not visible.
-- **The desktop app** (`app/`, Rust + egui): connects to the device over Wi-Fi or Ethernet, renders each plugin from
+- **The desktop app** (`app/`, Rust + egui): connects to the device over Wi-Fi or Ethernet (through an SSH tunnel), renders each plugin from
   its `TUI.json` and PNGs with the live values (or a generic knob panel when a plugin ships no skin), and sends the
   changes back. Around the panels: a transport bar (play, stop, record, continue, bar steps), a timeline of the
   current sequence with its loop and the playhead (click a bar to locate there), the project's tracks (colour,
@@ -43,9 +43,24 @@ snapshot comes from. `enabled=0` keeps the addin idle.
 For transport and MIDI, enable the `MPC Commander` port in MPC's MIDI preferences: as an input (with Receive MMC on,
 so the app's play/stop/record reach MPC) and as an output with clock sync and Send MMC (so the app follows MPC).
 
+## Connecting: an SSH tunnel
+
+The addin listens on the device only (`bind=127.0.0.1`): it has no login, and it runs as root inside MPC. To reach it
+from a computer, open an SSH tunnel and leave it running:
+
+```sh
+ssh -N -L 6730:127.0.0.1:6730 root@<device address>
+```
+
+Then connect the app to `localhost` (port 6730). To open the addin to your network instead, set `bind=0.0.0.0` in
+the settings: anyone who can reach the port can then change the plugins' parameters, send MIDI and transport into
+MPC, write to the control-surface injector file and read the project, and a web page open in a browser on that
+network can send it requests too.
+
 ## Run the app
 
-See `app/README.md`. In short: `cargo run --release -p commander` from `app/`, enter the device's address, Connect.
+See `app/README.md`. In short: open the tunnel, `cargo run --release -p commander` from `app/`, enter `localhost`,
+Connect.
 
 ## Protocol and rendering
 

@@ -17,9 +17,11 @@ Metal.
 
 ## Run
 
-    cargo run --release -- --host mpc.local [--port 6730]
+    ssh -N -L 6730:127.0.0.1:6730 root@mpc.local     # the addin listens on the device only
+    cargo run --release -- --host localhost [--port 6730]
 
-Type the device's address into the Host field and press Connect; `--host` sets it from the
+Type the host into the Host field (`localhost` through the tunnel, or the device's address when its
+settings say `bind=0.0.0.0`) and press Connect; `--host` sets it from the
 command line. The last host and the window size are saved to
 `~/.config/mpc-commander/config.toml` (`$XDG_CONFIG_HOME` is honoured); `connect_on_start`
 there reconnects at launch. Skin files are cached under `~/.cache/mpc-commander/<plugin uid>/`

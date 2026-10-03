@@ -9,7 +9,7 @@ void conf_defaults(struct conf *c)
 {
     memset(c, 0, sizeof *c);
     c->enabled = 1;
-    snprintf(c->bind, sizeof c->bind, "0.0.0.0");
+    snprintf(c->bind, sizeof c->bind, "127.0.0.1");
     c->port = 6730;
     c->max_clients = 6;
     c->nice = 10;

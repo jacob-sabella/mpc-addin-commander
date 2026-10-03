@@ -4,7 +4,7 @@
 
 struct conf {
     int enabled;       // enabled=0 keeps the addin loaded but idle (plugins still load through the hook, untouched)
-    char bind[46];     // listen address (0.0.0.0: every interface)
+    char bind[46];     // listen address (127.0.0.1: the device only; 0.0.0.0: every interface)
     int port;
     int max_clients;   // connections at once
     int nice;          // the addin threads' nice value, 0..19
