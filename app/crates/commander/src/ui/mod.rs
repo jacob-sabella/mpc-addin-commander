@@ -280,6 +280,7 @@ impl App {
         if snap.instances.is_empty() {
             ui.label(RichText::new("No plugin instances").color(theme::SUBTEXT));
         }
+        self.select_by_keys(ui, snap);
         egui::ScrollArea::vertical().show(ui, |ui| {
             for inst in &snap.instances {
                 let p = &inst.plugin;
@@ -320,6 +321,37 @@ impl App {
                 }
             }
         });
+    }
+
+    /// Up and Down move the selection through the instance list while no text field has focus.
+    fn select_by_keys(&mut self, ui: &egui::Ui, snap: &Snapshot) {
+        if snap.instances.is_empty() || ui.ctx().egui_wants_keyboard_input() {
+            return;
+        }
+        let (up, down) = ui.input(|i| {
+            (
+                i.key_pressed(egui::Key::ArrowUp),
+                i.key_pressed(egui::Key::ArrowDown),
+            )
+        });
+        if !up && !down {
+            return;
+        }
+        let last = snap.instances.len() - 1;
+        let at = self
+            .selected
+            .and_then(|id| snap.instances.iter().position(|i| i.plugin.id == id));
+        let next = match (at, down) {
+            (None, true) => 0,
+            (None, false) => last,
+            (Some(n), true) => (n + 1).min(last),
+            (Some(n), false) => n.saturating_sub(1),
+        };
+        let id = snap.instances[next].plugin.id;
+        if self.selected != Some(id) {
+            self.selected = Some(id);
+            self.send(ClientMessage::Subscribe { ids: vec![id] });
+        }
     }
 
     fn log_pane(&mut self, ui: &mut egui::Ui, snap: &Snapshot) {
