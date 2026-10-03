@@ -13,7 +13,7 @@ Parameter values are VST2 values: floats from 0 to 1. `text` is what the plugin 
 |---|---|---|
 | `hello` | `protocol` (1), `addin` (version string), `device` `{model, mpc}` (`/proc/device-tree/model`, `/tmp/com.akaipro.mpc.version`), `poll_ms`, `text_ms`, `midi` (`{client}`: the sequencer client number of the addin's port, or `{error}`) | first message after the upgrade |
 | `plugins` | `plugins`: array of plugin objects | right after `hello`, and on request (`list`) |
-| `transport` | `playing`, `recording`, `tempo` (bpm from MPC's clock, which MPC sends stopped or playing; `null` until two beats were clocked), `bar`, `beat` (1-based, 4 beats a bar), `tick` (0..959 of the beat), `source` (`"clock"`, `"mmc"` or `""` before anything arrived) | right after `plugins`; then on every start, stop, continue, song position, MMC command, beat and tempo change |
+| `transport` | `playing`, `recording`, `tempo` (bpm from MPC's clock, which MPC sends stopped or playing; `null` until two beats were clocked), `bar`, `beat` (1-based, 4 beats a bar), `tick` (0..959 of the beat), `source` (`"clock"`, `"mmc"` or `""` before anything arrived) | right after `plugins`; then on every start, stop, continue, song position, MMC command or locate (a time code position, turned into bars at the clock's tempo), beat and tempo change |
 | `midi_in` | `bytes` (the message; a sysex keeps its first 16 bytes), `ms` (the addin's clock) | anything but clock, start/stop/continue, song position and MMC arrives on the addin's port |
 | `project` | see below | reply to `project` |
 | `plugin_added` | `plugin`: a plugin object | MPC created an instance |

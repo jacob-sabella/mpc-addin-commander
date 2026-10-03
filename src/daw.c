@@ -54,6 +54,17 @@ static void push_midi_in(const struct midi_msg *m, long long at)
     sb_free(&b);
 }
 
+// MMC locate: F0 7F <device> 06 44 06 01 <hr> <mn> <sc> <fr> <ff> F7, a time code position. The hour byte's bits 5-6
+// are the frame rate (24, 25, 29.97 drop, 30). The position in clocks needs the tempo; -1 while it is unknown.
+static long locate_clocks(const struct midi_msg *m)
+{
+    if (m->len != 13 || m->b[1] != 0x7F || m->b[3] != 0x06 || m->b[4] != 0x44 || m->b[5] != 0x06 || m->b[6] != 0x01) return -1;
+    static const double fps[] = { 24, 25, 29.97, 30 };
+    double sec = (m->b[7] & 31) * 3600.0 + (m->b[8] & 63) * 60.0 + (m->b[9] & 63) + ((m->b[10] & 31) + (m->b[11] & 127) / 100.0) / fps[(m->b[7] >> 5) & 3];
+    if (T.tempo <= 0) return sec == 0 ? 0 : -1;
+    return (long)(sec * T.tempo / 60.0 * CLOCKS_PER_BEAT + 0.5);
+}
+
 static int is_mmc(const struct midi_msg *m)
 {
     // MMC: F0 7F <device> 06 <command> F7
@@ -64,6 +75,13 @@ static int is_mmc(const struct midi_msg *m)
 static int on_message(const struct midi_msg *m, long long at)
 {
     uint8_t st = m->b[0];
+    if (st == 0xF0 && m->len == 13) {
+        pthread_mutex_lock(&lock);
+        long c = locate_clocks(m);
+        if (c >= 0) { T.clocks = c; T.source = "mmc"; }
+        pthread_mutex_unlock(&lock);
+        if (c >= 0) return 1;
+    }
     if (!(st == 0xF8 || st == 0xFA || st == 0xFB || st == 0xFC || st == 0xF2 || is_mmc(m))) {
         push_midi_in(m, at);   // notes, controllers, other sysex: the app's to interpret
         return 0;
@@ -74,6 +92,7 @@ static int on_message(const struct midi_msg *m, long long at)
     case 0xF8:
         // MPC sends clock whenever sync output is on for the port, stopped or not: the tempo always comes from it,
         // the position only moves while playing.
+        if (clock_n && at - clock_at[(clock_n - 1) % TEMPO_WINDOW] > 250) clock_n = 0;   // a pause isn't a slow tempo
         clock_at[clock_n++ % TEMPO_WINDOW] = at;
         if (clock_n >= TEMPO_WINDOW) {
             long long span = at - clock_at[clock_n % TEMPO_WINDOW];   // the oldest one still in the ring
@@ -117,9 +136,8 @@ void *daw_thread(void *arg)
         long long t0 = now_ms();
         int k = midi_listen(50, m, 64);
         if (!k && midi_open()) { nanosleep(&(struct timespec){ 1, 0 }, NULL); continue; }   // no port: idle
-        int push = 0;
-        for (int i = 0; i < k; i++) push |= on_message(&m[i], t0 + m[i].ms);
-        if (push) push_transport();
+        for (int i = 0; i < k; i++)
+            if (on_message(&m[i], t0 + m[i].ms)) push_transport();   // each change as it happened, not per batch
     }
     return NULL;
 }

@@ -331,8 +331,23 @@ if FAKE_MIDI:
         midi_in([0xF8])
         time.sleep(0.01)
     t = ws.wait(lambda m: m["t"] == "transport" and m["beat"] == 3)
-    assert t["bar"] == 1 and t["tick"] == 0 and t["playing"], t
+    assert t["bar"] == 1 and t["tick"] == 0 and t["playing"], t   # beats are pushed on the beat
     assert t["tempo"] and 150 < t["tempo"] < 330, t    # 250 bpm at 10 ms a clock, through the test's own sleep jitter
+    # a pause in the clock isn't a slow tempo
+    time.sleep(0.4)
+    for k in range(60):
+        midi_in([0xF8])
+        time.sleep(0.01)
+    t = ws.wait(lambda m: m["t"] == "transport" and m["bar"] == 2)   # 48 + 60 clocks: bar 2, beat 1
+    assert 150 < t["tempo"] < 330, t
+    # MMC locate: a time code position, turned into bars at the clock's tempo
+    midi_in([0xF0, 0x7F, 0x00, 0x06, 0x44, 0x06, 0x01, 0x20 | 0, 0, 3, 0, 0, 0xF7])   # 25 fps, 0:00:03.00
+    t = ws.wait(lambda m: m["t"] == "transport" and m["bar"] != 2)
+    beats = 3 * t["tempo"] / 60   # at the tempo the addin had then
+    assert abs((t["bar"] - 1) * 4 + (t["beat"] - 1) + t["tick"] / 960 - beats) < 0.05, (t, beats)
+    midi_in([0xF0, 0x7F, 0x00, 0x06, 0x44, 0x06, 0x01, 0, 0, 0, 0, 0, 0xF7])
+    t = ws.wait(lambda m: m["t"] == "transport" and m["bar"] == 1 and m["beat"] == 1 and m["tick"] == 0)
+    print("ok   a clock pause keeps the tempo; MMC locate sets the position")
     midi_in([0xF2, 0, 1])               # 128 sixteenths = bar 9
     t = ws.wait(lambda m: m["t"] == "transport" and m["bar"] == 9)
     assert t["beat"] == 1 and t["tick"] == 0, t
