@@ -72,8 +72,8 @@ static int on_message(const struct midi_msg *m, long long at)
     pthread_mutex_lock(&lock);
     switch (st) {
     case 0xF8:
-        if (!T.playing) break;   // MPC clocks while stopped too; the position only moves while playing
-        T.clocks++;
+        // MPC sends clock whenever sync output is on for the port, stopped or not: the tempo always comes from it,
+        // the position only moves while playing.
         clock_at[clock_n++ % TEMPO_WINDOW] = at;
         if (clock_n >= TEMPO_WINDOW) {
             long long span = at - clock_at[clock_n % TEMPO_WINDOW];   // the oldest one still in the ring
@@ -83,10 +83,10 @@ static int on_message(const struct midi_msg *m, long long at)
                 push = 1;
             }
         }
-        if (T.clocks % CLOCKS_PER_BEAT == 0) push = 1;
+        if (T.playing && ++T.clocks % CLOCKS_PER_BEAT == 0) push = 1;
         break;
-    case 0xFA: T.playing = 1; T.clocks = 0; clock_n = 0; T.source = "clock"; push = 1; break;
-    case 0xFB: T.playing = 1; clock_n = 0; T.source = "clock"; push = 1; break;
+    case 0xFA: T.playing = 1; T.clocks = 0; T.source = "clock"; push = 1; break;
+    case 0xFB: T.playing = 1; T.source = "clock"; push = 1; break;
     case 0xFC: T.playing = 0; T.recording = 0; T.source = "clock"; push = 1; break;
     case 0xF2: T.clocks = (long)((m->b[2] & 127) << 7 | (m->b[1] & 127)) * 6; push = 1; break;   // 1/16 notes
     default:

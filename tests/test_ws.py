@@ -316,6 +316,13 @@ if FAKE_MIDI:
     assert ws.wait(lambda m: m["t"] == "error")
     print("ok   midi from the app reaches the port; bad messages refused")
 
+    # MPC clocks while stopped: a tempo, no movement (at 10 ms a clock: 250 bpm)
+    for k in range(60):
+        midi_in([0xF8])
+        time.sleep(0.01)
+    t = ws.wait(lambda m: m["t"] == "transport" and m["tempo"] is not None)
+    assert not t["playing"] and t["bar"] == 1 and t["beat"] == 1 and 150 < t["tempo"] < 330, t
+    print("ok   clock while stopped gives the tempo and doesn't move the position")
     # MPC starts, clocks for two beats (at 10 ms a clock: 250 bpm), sends a song position, then stops over MMC
     midi_in([0xFA])
     t = ws.wait(lambda m: m["t"] == "transport" and m["playing"])
