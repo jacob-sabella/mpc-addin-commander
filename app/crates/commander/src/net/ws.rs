@@ -64,6 +64,10 @@ pub async fn session(model: &Shared, rx: &mut CmdRx, host: &str, port: u16, atte
         m.log(format!("connected to {url}"));
     }
     let (mut sink, mut stream) = ws.split();
+    // A project snapshot up front gives the timeline the sequence's length and loop.
+    if let Ok(text) = serde_json::to_string(&ClientMessage::Project) {
+        let _ = sink.send(Message::text(text)).await;
+    }
     let mut ping = tokio::time::interval(PING_PERIOD);
     let mut ping_sent: Option<Instant> = None;
     let end = loop {

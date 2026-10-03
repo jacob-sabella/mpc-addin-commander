@@ -15,11 +15,17 @@ Two halves:
   stock instruments are internal to MPC and are not visible.
 - **The desktop app** (`app/`, Rust + egui): connects to the device over Wi-Fi or Ethernet, renders each plugin from
   its `TUI.json` and PNGs with the live values (or a generic knob panel when a plugin ships no skin), and sends the
-  changes back. A transport bar and a track list sit above the panels.
+  changes back. Around the panels: a transport bar (play, stop, record, continue, bar steps), a timeline of the
+  current sequence with its loop and the playhead (click a bar to locate there), the project's tracks (colour,
+  type, record arm, mute and solo, volume and pan, plugin and preset), an on-screen keyboard (mouse or computer
+  keys, any channel) and the MIDI arriving from MPC. Up and Down step through the plugin instances.
 
 **Status:** the addin passes its offline tests (x86: the hook, poll thread, server, transport and project paths under
 ASan+UBSan and TSan, the real `.so` preloaded into a process named `MPC`, the sequencer port where the build machine
-has one, the installer under BusyBox) and builds for armhf (glibc symbols up to 2.31). Not yet verified on a device.
+has one, the installer under BusyBox) and builds for armhf (glibc symbols up to 2.31). On an MPC Key 37 (software
+3.9.1.2): plugin instances, live values and edits, the MIDI port, MMC transport both ways and the project snapshot
+work, and the app runs against it. Locating from the app (MMC locate) and recording from the app are not verified
+yet.
 
 ## Install the addin
 

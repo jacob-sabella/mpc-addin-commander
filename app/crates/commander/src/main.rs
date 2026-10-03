@@ -5,6 +5,7 @@
 #![forbid(unsafe_code)]
 
 mod config;
+mod midi;
 mod model;
 mod net;
 mod shell;

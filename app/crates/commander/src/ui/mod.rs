@@ -47,6 +47,8 @@ pub struct App {
     textures: HashMap<TexKey, TextureHandle>,
     show_tracks: bool,
     show_midi: bool,
+    pub show_keys: bool,
+    pub keys: daw::Keys,
 }
 
 impl App {
@@ -63,6 +65,8 @@ impl App {
             textures: HashMap::new(),
             show_tracks: true,
             show_midi: true,
+            show_keys: false,
+            keys: daw::Keys::default(),
         };
         if app.config.connect_on_start && !app.config.host.is_empty() {
             app.connect();
@@ -170,13 +174,22 @@ impl App {
         if snap.transport.is_some() {
             egui::Panel::top("transport")
                 .frame(egui::Frame::new().fill(theme::CRUST).inner_margin(8.0))
-                .show_inside(ui, |ui| daw::transport_bar(self, ui, &snap));
+                .show_inside(ui, |ui| {
+                    daw::transport_bar(self, ui, &snap);
+                    ui.add_space(4.0);
+                    daw::timeline(self, ui, &snap);
+                });
         }
         egui::Panel::bottom("log")
             .resizable(true)
             .default_size(140.0)
             .frame(egui::Frame::new().fill(theme::MANTLE).inner_margin(8.0))
             .show_inside(ui, |ui| self.log_pane(ui, &snap));
+        if self.show_keys && snap.transport.is_some() {
+            egui::Panel::bottom("keys")
+                .frame(egui::Frame::new().fill(theme::CRUST).inner_margin(8.0))
+                .show_inside(ui, |ui| daw::keyboard(self, ui, &snap));
+        }
         egui::Panel::left("instances")
             .default_size(250.0)
             .frame(egui::Frame::new().fill(theme::MANTLE).inner_margin(8.0))
