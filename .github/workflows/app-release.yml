@@ -1,4 +1,5 @@
 # The desktop app for Linux, attached to a DRAFT release on a v* tag (the addin's own releases are commander-addin-v*).
+# Run it by pushing a v<x.y.z> tag or from the Actions tab, then publish the draft.
 name: App release
 
 on:
