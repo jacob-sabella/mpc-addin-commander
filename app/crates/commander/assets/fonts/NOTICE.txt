@@ -1,0 +1,10 @@
+Fonts bundled with the Commander desktop app
+
+Titillium Web (TitilliumWeb-Regular.ttf, TitilliumWeb-SemiBold.ttf, TitilliumWeb-Bold.ttf)
+  Copyright (c) 2009-2011 by Accademia di Belle Arti di Urbino and students of MA course of Visual design.
+  Licensed under the SIL Open Font License, Version 1.1: see OFL.txt.
+
+Roboto (Roboto-Bold.ttf)
+  Copyright 2011 Google Inc. All Rights Reserved.
+  Licensed under the Apache License, Version 2.0: see Roboto-LICENSE.txt.
+  Only the Bold weight is bundled; skins that ask for another Roboto style get Roboto Bold.

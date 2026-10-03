@@ -1,0 +1,4 @@
+# Tunable knobs for the lints selected in the workspace Cargo.toml.
+doc-valid-idents = ["GPU", "CPU", "API", "URL", "UV", "PNG", "JSON", "WebSocket", "ETag", "ALSA", "MMC"]
+too-many-lines-threshold = 200
+cognitive-complexity-threshold = 30

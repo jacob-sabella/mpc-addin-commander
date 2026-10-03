@@ -1,0 +1,3 @@
+{"t": "project", "name": "Demo", "path": "/storage/Projects/Demo.xpj", "tempo": 92.5,
+ "tracks": [{"index": 0, "name": "Drums", "type": "drum", "mute": false, "solo": false, "volume": 0.8, "pan": 0.5, "plugin": null},
+            {"index": 1, "name": "Keys", "type": "plugin", "mute": true, "solo": false, "volume": 0.7, "pan": 0.4, "plugin": "Chordsmith"}]}

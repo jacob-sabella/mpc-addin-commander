@@ -1,0 +1,9 @@
+{"t": "plugins", "plugins": [
+ {"id": 3, "name": "Chordsmith", "vendor": "jacob-sabella", "product": "Chordsmith", "uid": "4368536d",
+  "so": "/storage/Synths/jacob-sabella - VST - Chordsmith/chordsmith.so", "skin": true, "synth": true,
+  "params": [{"i": 0, "name": "Key", "label": "", "value": 0.0, "text": "C"},
+             {"i": 1, "name": "Scale", "label": "", "value": 0.125, "text": "Minor"}]},
+ {"id": 4, "name": "Delay", "vendor": "jacob-sabella", "product": "Delay", "uid": "446c6179",
+  "so": "/storage/Synths/jacob-sabella - VST - Delay/delay.so", "skin": false, "synth": false,
+  "params": [{"i": 0, "name": "Time", "label": "ms", "value": 0.5, "text": "250"}]}
+]}

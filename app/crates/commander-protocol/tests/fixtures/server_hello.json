@@ -1,0 +1,1 @@
+{"t": "hello", "protocol": 1, "addin": "0.1.0", "device": {"model": "standalone", "mpc": "3.4.0"}, "poll_ms": 20, "text_ms": 200}

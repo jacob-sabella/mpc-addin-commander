@@ -1,0 +1,59 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/commander-protocol",
+    "crates/commander-skin",
+    "crates/commander",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+# Floor set by the dependency tree: egui 0.34 and wgpu 29 need 1.95.
+rust-version = "1.95"
+license = "MIT"
+authors = ["Jacob Sabella <jacobsabella@outlook.com>"]
+repository = "https://github.com/jacob-sabella/mpc-addin-commander"
+
+[workspace.dependencies]
+commander-protocol = { path = "crates/commander-protocol" }
+commander-skin = { path = "crates/commander-skin" }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1"
+toml = "0.8"
+anyhow = "1"
+log = "0.4"
+env_logger = "0.11"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time", "net", "io-util"] }
+tokio-tungstenite = "0.29"
+futures-util = { version = "0.3", default-features = false, features = ["sink", "std"] }
+egui = "0.34"
+egui-wgpu = { version = "0.34", default-features = false }
+# Vulkan and Metal only: the GLES path is unstable on some Linux drivers and the
+# DX12 path pulls a conflicting windows crate tree.
+wgpu = { version = "29", default-features = false, features = [
+    "std",
+    "parking_lot",
+    "metal",
+    "vulkan",
+    "wgsl",
+] }
+winit = "0.30"
+pollster = "0.4"
+image = { version = "0.25", default-features = false, features = ["png"] }
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+strip = true
+
+# Workspace-wide lint policy; crates opt in with `[lints] workspace = true`.
+[workspace.lints.rust]
+unsafe_op_in_unsafe_fn = "warn"
+rust_2018_idioms = { level = "warn", priority = -1 }
+elided_lifetimes_in_paths = "allow"
+nonstandard_style = { level = "warn", priority = -1 }
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }

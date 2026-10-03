@@ -1,0 +1,1 @@
+{"t": "plugin_added", "plugin": {"id": 5, "name": "Chordsmith", "vendor": "jacob-sabella", "product": "Chordsmith", "uid": "4368536d", "so": "/storage/Synths/jacob-sabella - VST - Chordsmith/chordsmith.so", "skin": true, "synth": true, "params": [{"i": 0, "name": "Key", "label": "", "value": 0.0, "text": "C"}]}}
