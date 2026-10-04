@@ -12,7 +12,13 @@ on:
 
 jobs:
   addin:
+    # Skip workflow runs from fork PRs — only repo-internal pushes / PRs run.
+    # Combined with branch-protection "Require approval for first-time
+    # contributors" / "Require approval for all outside collaborators",
+    # this means only the repo owner can trigger CI.
+    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-24.04
+    name: Addin (host)
     steps:
       - uses: actions/checkout@v4
         with: { path: mpc-addin-commander }
@@ -27,14 +33,18 @@ jobs:
       - run: tests/test.sh
         working-directory: mpc-addin-commander
   armhf:
+    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
+    name: armhf (MPC OS)
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-qemu-action@v3
         with: { platforms: arm }
       - run: ./build.sh
   app:
+    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-24.04
+    name: Desktop app
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
