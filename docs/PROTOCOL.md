@@ -30,8 +30,9 @@ A plugin object:
  "params": [{"i": 0, "name": "Key", "label": "", "value": 0.0, "text": "C"}, ...]}
 ```
 
-`id` is unique for the life of the MPC process (never reused). `skin` says whether `Plugin Skins/TUI.json` exists in
-the plugin's folder (the folder of `so`). `params` is complete and in VST index order.
+`id` is unique for the life of the MPC process (never reused). `skin` says whether the plugin has a `Plugin Skins/TUI.json`: in the folder of `so`, else in
+`<vendor> - VST - <product>/` beside that folder, where MPC finds it by name (a `.so` loaded from `Synths/NAM/` with its
+skin in `Synths/jacob-sabella - VST - NAM/`). `params` is complete and in VST index order.
 
 ## Client to server
 
@@ -83,7 +84,7 @@ in the file; `type` names the ones seen so far (`drum` 0, `plugin` 3, `audio` 6,
 | `GET /info` | JSON: `version`, `protocol`, `plugins` (count), `clients` |
 | `GET /plugins` | the `plugins` message as a document, for scripts |
 | `GET /project` | the `project` message as a document |
-| `GET /skin/<id>/<path>` | a file from that plugin's `Plugin Skins/` folder, read-only; `..` and symlinks out of the folder are refused; `ETag` is the file's size and mtime, `If-None-Match` gives 304 |
+| `GET /skin/<id>/<path>` | a file from that plugin's `Plugin Skins/` folder (found as for `skin` above), read-only; `..` and symlinks out of the folder are refused; `ETag` is the file's size and mtime, `If-None-Match` gives 304 |
 | `GET /` | a short page naming the addin and its version |
 
 Every HTTP reply but the WebSocket is `Connection: close`.

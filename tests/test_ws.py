@@ -2,7 +2,7 @@
 """The addin's server end to end: tests/fake_host (built with the addin's sources) loads tests/fake_plugin.so
 through the hooked dlsym while this script talks to the WebSocket. Usage: test_ws.py <fake_host> <fake_plugin.so>.
 No third-party packages: the WebSocket client below is the handshake plus masked text frames."""
-import base64, hashlib, json, os, socket, struct, subprocess, sys, time, urllib.request
+import base64, hashlib, json, os, shutil, socket, struct, subprocess, sys, time, urllib.error, urllib.request
 
 HOST, PLUGIN = sys.argv[1], os.path.abspath(sys.argv[2])
 PORT = socket.socket(); PORT.bind(("127.0.0.1", 0)); PORT = PORT.getsockname()[1]
@@ -237,6 +237,22 @@ n3 = int(cmd("load " + PLUGIN).split()[1])
 a4 = ws.wait(lambda m: m["t"] == "plugin_added")
 ID4 = a4["plugin"]["id"]
 assert not a4["plugin"]["skin"]
+# /skin by name: no skin next to the .so, but "<vendor> - VST - <product>/Plugin Skins" beside its folder, as MPC finds it
+byname = os.path.join(os.path.dirname(os.path.dirname(PLUGIN)), "mpc-addin-commander tests - VST - Fake Synth")
+shutil.rmtree(byname, ignore_errors=True)
+os.makedirs(os.path.join(byname, "Plugin Skins"))
+open(os.path.join(byname, "Plugin Skins", "TUI.json"), "w").write('{"by": "name"}')
+try:
+    ws.send({"t": "list"})
+    assert ws.wait(lambda m: m["t"] == "plugins")["plugins"][0]["skin"]
+    r = urllib.request.urlopen("http://127.0.0.1:%d/skin/%d/TUI.json" % (PORT, ID4))
+    assert r.read() == b'{"by": "name"}'
+finally:
+    shutil.rmtree(byname)
+ws.send({"t": "list"})
+assert not ws.wait(lambda m: m["t"] == "plugins")["plugins"][0]["skin"]
+print("ok   a skin found by name beside the plugin's folder, as MPC finds it")
+
 skin = os.path.join(os.path.dirname(PLUGIN), "Plugin Skins")
 os.makedirs(os.path.join(skin, "sub"), exist_ok=True)
 open(os.path.join(skin, "TUI.json"), "w").write('{"x": 1}')

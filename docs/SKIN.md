@@ -1,6 +1,7 @@
 # Rendering a plugin's skin on the desktop
 
-A port built with mpc-vst-plugins ships `Plugin Skins/TUI.json` and PNGs next to its `.so`. MPC draws the plugin's
+A port built with mpc-vst-plugins ships `Plugin Skins/TUI.json` and PNGs next to its `.so` (or, when the `.so` was
+moved, in `<vendor> - VST - <product>/` beside its folder, where MPC finds them by name; the addin looks there too). MPC draws the plugin's
 pages from those files and the plugin's live parameter values and display text. The desktop app fetches the same
 files from the addin (`GET /skin/<id>/<path>`, see PROTOCOL.md) and draws the same thing from the same data. This
 file is the subset of the format the app renders, as `tools/shadow_skin.py write_skin()` in mpc-vst-plugins emits

@@ -52,7 +52,7 @@ void inst_json(struct sb *b, const struct inst *in)
     sb_printf(b, ",\"uid\":\"%08x\",\"so\":", in->uid);
     sb_jstr(b, so);
     sb_printf(b, ",\"skin\":%s,\"synth\":%s,\"sample_rate\":%d,\"params\":[",
-              ws_skin_exists(so) ? "true" : "false", in->synth ? "true" : "false", atomic_load(&in->sample_rate));
+              ws_skin_exists(so, in->vendor, in->product) ? "true" : "false", in->synth ? "true" : "false", atomic_load(&in->sample_rate));
     for (int i = 0; i < in->nparams; i++) {
         if (i) sb_puts(b, ",");
         param_json(b, &in->params[i], i);

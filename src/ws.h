@@ -8,7 +8,7 @@ void *server_thread(void *arg);
 void ws_broadcast(const char *json, size_t n);
 // Some client subscribed to this instance id.
 int ws_subscribed(int id);
-// The plugin at this .so path ships Plugin Skins/TUI.json.
-int ws_skin_exists(const char *so_path);
+// The plugin has a Plugin Skins/TUI.json: next to its .so, or in "<vendor> - VST - <product>" beside the .so's folder.
+int ws_skin_exists(const char *so_path, const char *vendor, const char *product);
 
 #endif

@@ -402,22 +402,35 @@ static void session(int fd, const char *req)
 }
 
 // ---- skin files ----
-static int skin_dir(const char *so, char *out, size_t n)
+static int has_tui(const char *dir)
 {
-    const char *slash = strrchr(so, '/');
-    if (!slash) return -1;
-    snprintf(out, n, "%.*s/Plugin Skins", (int)(slash - so), so);
-    return 0;
-}
-
-int ws_skin_exists(const char *so)
-{
-    char dir[600];
-    if (skin_dir(so, dir, sizeof dir)) return 0;
     char p[700];
     snprintf(p, sizeof p, "%s/TUI.json", dir);
     struct stat st;
     return stat(p, &st) == 0 && S_ISREG(st.st_mode);
+}
+
+// A plugin's Plugin Skins folder: next to its .so, else the one MPC finds by name, "<vendor> - VST - <product>" in the
+// same Synths folder as the .so's own folder (a .so loaded from /storage/Synths/NAM/ gets its skin from
+// /storage/Synths/jacob-sabella - VST - NAM/). -1 when neither has a TUI.json.
+static int skin_dir(const char *so, const char *vendor, const char *product, char *out, size_t n)
+{
+    const char *slash = strrchr(so, '/');
+    if (!slash) return -1;
+    snprintf(out, n, "%.*s/Plugin Skins", (int)(slash - so), so);
+    if (has_tui(out)) return 0;
+    const char *up = slash;
+    while (up > so && up[-1] != '/') up--;
+    if (up == so || !vendor[0] || !product[0] || strchr(vendor, '/') || strchr(product, '/') ||
+        !strcmp(vendor, "..") || !strcmp(product, "..")) return -1;
+    snprintf(out, n, "%.*s%s - VST - %s/Plugin Skins", (int)(up - so), so, vendor, product);
+    return has_tui(out) ? 0 : -1;
+}
+
+int ws_skin_exists(const char *so, const char *vendor, const char *product)
+{
+    char dir[600];
+    return skin_dir(so, vendor, product, dir, sizeof dir) == 0;
 }
 
 static int unescape(char *s)
@@ -457,13 +470,17 @@ static void serve_skin(int fd, const char *req, const char *rest)
     snprintf(sub, sizeof sub, "%s", end + 1);
     unescape(sub);
     if (!sub[0] || sub[0] == '/' || strstr(sub, "..") || strchr(sub, '\\')) { reply_text(fd, "404 Not Found", "not found"); return; }
-    char so[512] = "";
+    char so[512] = "", vendor[64] = "", product[64] = "";
     pthread_mutex_lock(&registry_lock);
     struct inst *in = hook_find((int)id);
-    if (in) snprintf(so, sizeof so, "%s", modules[in->module].path);
+    if (in) {
+        snprintf(so, sizeof so, "%s", modules[in->module].path);
+        snprintf(vendor, sizeof vendor, "%s", in->vendor);
+        snprintf(product, sizeof product, "%s", in->product);
+    }
     pthread_mutex_unlock(&registry_lock);
     char dir[600], path[1200], real_dir[PATH_MAX], real_path[PATH_MAX];
-    if (!so[0] || skin_dir(so, dir, sizeof dir) || !realpath(dir, real_dir)) { reply_text(fd, "404 Not Found", "no skin"); return; }
+    if (!so[0] || skin_dir(so, vendor, product, dir, sizeof dir) || !realpath(dir, real_dir)) { reply_text(fd, "404 Not Found", "no skin"); return; }
     snprintf(path, sizeof path, "%s/%s", dir, sub);
     size_t dl = strlen(real_dir);
     if (!realpath(path, real_path) || strncmp(real_path, real_dir, dl) || real_path[dl] != '/') {   // no escape by symlink
