@@ -265,6 +265,11 @@ int hook_set(int id, int index, float value)
     int r = -1;
     if (fx && index >= 0 && index < in->nparams) {
         in->setParameter(fx, index, value);
+        // Tell the host, as a plugin does when its own value moves: MPC redraws a knob from the value it last set or
+        // was told about, so without this the screen kept the old value (an option list or a text readout that the
+        // plugin itself refreshes did follow). The real callback, not ours: this is the addin's set, not the plugin's.
+        audioMasterCallback real = atomic_load_explicit(&modules[in->module].master, memory_order_acquire);
+        if (real) real(fx, audioMasterAutomate, index, 0, NULL, fx->getParameter(fx, index));
         atomic_fetch_or(&in->dirty, DIRTY_VALUES);
         inst_force(in, index);
         r = 0;

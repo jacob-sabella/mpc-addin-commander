@@ -174,6 +174,7 @@ ws.send({"t": "set", "id": ID, "i": 0, "value": 0.25})
 v = ws2.wait(lambda m: m["t"] == "values" and m["id"] == ID and any(x[0] == 0 for x in m["v"]))
 assert [0, 0.25, "5015"] in v["v"], v
 assert cmd("get %d 0" % n0) == "0.25"
+assert cmd("automated %d" % n0).split()[1:] == ["0", "0.25"]   # the host was told, so its screen follows
 ws.send({"t": "set", "id": ID, "i": 0, "value": 7})     # clamped
 ws2.wait(lambda m: m["t"] == "values" and m["id"] == ID and [0, 1, "20000"] in m["v"])
 assert cmd("get %d 0" % n0) == "1"

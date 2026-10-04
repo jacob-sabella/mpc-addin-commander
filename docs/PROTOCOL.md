@@ -38,7 +38,7 @@ skin in `Synths/jacob-sabella - VST - NAM/`). `params` is complete and in VST in
 
 | `t` | Fields | Effect |
 |---|---|---|
-| `set` | `id`, `i`, `value` | `setParameter(i, value)` on that instance, from the addin's thread; the next poll reports what the plugin now returns |
+| `set` | `id`, `i`, `value` | `setParameter(i, value)` on that instance, from the addin's thread, then `audioMasterAutomate` to MPC with the value the plugin now returns (as when the plugin moves a value itself), so MPC's screen follows; the next poll reports it to the clients |
 | `subscribe` | `ids`: array | these instances get their text polled at `poll_ms`; the others at `text_ms`. Default: none |
 | `list` | | a fresh `plugins` message |
 | `ping` | | `pong` |

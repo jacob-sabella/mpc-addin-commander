@@ -12,6 +12,7 @@
 #include <dlfcn.h>
 #include <pthread.h>
 #include <stdio.h>
+#include <stdatomic.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
@@ -23,7 +24,8 @@ void *HOST_DLSYM(void *, const char *);
 #endif
 
 #define MAX 16
-struct slot { AEffect *fx; void *handle; int in_use; } slots[MAX];
+// The last audioMasterAutomate per slot (from any thread: the plugin's or the addin's), read by "automated".
+struct slot { AEffect *fx; void *handle; int in_use; _Atomic int auto_n, auto_i; _Atomic float auto_v; } slots[MAX];
 static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
 
 static intptr_t host_callback(AEffect *fx, int32_t op, int32_t index, intptr_t value, void *ptr, float opt)
@@ -33,6 +35,7 @@ static intptr_t host_callback(AEffect *fx, int32_t op, int32_t index, intptr_t v
     if (!fx) return 0;
     struct slot *s = (struct slot *)fx->resvd2;      // like JUCE: the instance pointer lives in resvd2
     if (!s || s->fx != fx) { fprintf(stderr, "fake_host: callback with an unknown effect\n"); abort(); }
+    if (op == audioMasterAutomate) { s->auto_i = index; s->auto_v = opt; s->auto_n++; }
     return 0;
 }
 
@@ -90,6 +93,8 @@ int main(void)
             puts("ok");
         } else if (!strcmp(cmd, "next") && sscanf(line, "%*s %d", &n) == 1 && n >= 0 && n < MAX && slots[n].in_use) {
             printf("%d\n", (int)slots[n].fx->dispatcher(slots[n].fx, 0x7002, 0, 0, NULL, 0));
+        } else if (!strcmp(cmd, "automated") && sscanf(line, "%*s %d", &n) == 1 && n >= 0 && n < MAX && slots[n].in_use) {
+            printf("%d %d %.6g\n", (int)slots[n].auto_n, (int)slots[n].auto_i, (double)slots[n].auto_v);
         } else if (!strcmp(cmd, "get") && sscanf(line, "%*s %d %d", &n, &i) == 2 && n >= 0 && n < MAX && slots[n].in_use) {
             printf("%.6g\n", (double)slots[n].fx->getParameter(slots[n].fx, i));
         } else if (!strcmp(cmd, "close") && sscanf(line, "%*s %d", &n) == 1 && n >= 0 && n < MAX && slots[n].in_use) {
