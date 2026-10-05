@@ -91,6 +91,14 @@ pub fn show(
                     painter.image(tex, Rect::from_min_size(min, size), UV_FULL, Color32::WHITE);
                 }
             }
+            Item::Arrow { rect, colour: c } => {
+                let r = to_screen(*rect);
+                painter.add(egui::Shape::convex_polygon(
+                    vec![r.left_top(), r.right_top(), r.center_bottom()],
+                    colour(*c),
+                    Stroke::NONE,
+                ));
+            }
             Item::Label {
                 rect, text, style, ..
             } => draw_label(&painter, to_screen(*rect), text, style, scale),

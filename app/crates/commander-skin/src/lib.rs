@@ -256,6 +256,8 @@ pub enum Item {
         value: f32,
         param: Option<u32>,
     },
+    /// A down-pointing triangle filling `rect` (a menu's arrow).
+    Arrow { rect: Rect, colour: Colour },
     /// `text` in `style`, inside `rect`.
     Label {
         rect: Rect,
@@ -285,6 +287,7 @@ impl Item {
             | Item::Knob { rect, .. }
             | Item::Button { rect, .. }
             | Item::Slider { rect, .. }
+            | Item::Arrow { rect, .. }
             | Item::Label { rect, .. }
             | Item::Meter { rect, .. }
             | Item::Generic { rect, .. } => *rect,
@@ -419,6 +422,11 @@ enum Widget {
         id: u32,
         group: u32,
         handle: String,
+        /// An `Indicator`: lit like a button, never pressed.
+        lamp: bool,
+    },
+    Arrow {
+        colour: Colour,
     },
     Slider {
         thumb: String,
@@ -439,6 +447,28 @@ enum Widget {
         def: String,
         map: Vec<(String, String)>,
     },
+}
+
+impl Widget {
+    /// Makes the widget's images relative to the skin folder, from the folder of `file`.
+    fn rebase(&mut self, file: &str) {
+        let fix = |f: &mut String| {
+            if !f.is_empty() {
+                if let Some(p) = resolve_path(file, f) {
+                    *f = p;
+                }
+            }
+        };
+        match self {
+            Widget::Image { file } | Widget::Knob { file, .. } => fix(file),
+            Widget::Slider { thumb, .. } => fix(thumb),
+            Widget::Button { on, off, .. } => {
+                fix(on);
+                fix(off);
+            }
+            _ => {}
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -476,6 +506,31 @@ pub struct Page {
 pub struct Skin {
     pages: Vec<Page>,
     definitions: HashMap<String, Definition>,
+    imports: Vec<String>,
+}
+
+/// `rel` relative to the folder of `base`, both relative to the skin folder: `"../../A/x.json"`
+/// and `"../B/y.json"` give `"../../B/y.json"`. `None` for an absolute path.
+pub fn resolve_path(base: &str, rel: &str) -> Option<String> {
+    if rel.starts_with('/') || rel.contains('\\') {
+        return None;
+    }
+    let mut parts: Vec<&str> = base.split('/').collect();
+    parts.pop();
+    for c in rel.split('/') {
+        match c {
+            "" | "." => {}
+            ".." => {
+                if matches!(parts.last(), Some(p) if *p != "..") {
+                    parts.pop();
+                } else {
+                    parts.push("..");
+                }
+            }
+            c => parts.push(c),
+        }
+    }
+    Some(parts.join("/"))
 }
 
 impl Skin {
@@ -488,6 +543,7 @@ impl Skin {
     /// Resolves an already-deserialized document.
     pub fn from_tui(tui: model::Tui) -> Result<Self, Error> {
         let data = tui.page_data;
+        let imports = data.component_definitions.import_files.clone();
         let mut definitions: HashMap<String, Definition> = data
             .component_definitions
             .local_component_definitions
@@ -520,7 +576,43 @@ impl Skin {
             });
         }
         pages.sort_by_key(|p| (p.fn_key, p.sub_index));
-        Ok(Skin { pages, definitions })
+        Ok(Skin {
+            pages,
+            definitions,
+            imports: imports
+                .iter()
+                .filter_map(|i| resolve_path("TUI.json", i))
+                .collect(),
+        })
+    }
+
+    /// The definition files the skin imports, relative to the skin folder (`../../X/y.json`);
+    /// absolute paths are left out.
+    pub fn imports(&self) -> &[String] {
+        &self.imports
+    }
+
+    /// Adds the definitions of the imported file at `path` (as [`Skin::imports`] gives it) that
+    /// the skin does not define itself; its images become relative to the skin folder. Returns
+    /// the files it imports in turn.
+    pub fn add_library(&mut self, path: &str, json: &str) -> Result<Vec<String>, Error> {
+        let lib: model::Library = serde_json::from_str(json)?;
+        let defs = lib.component_definitions;
+        for kv in defs.local_component_definitions {
+            if self.definitions.contains_key(&kv.key) {
+                continue;
+            }
+            let mut def = convert_definition(kv.value);
+            for node in &mut def.children {
+                node.widget.rebase(path);
+            }
+            self.definitions.insert(kv.key, def);
+        }
+        Ok(defs
+            .import_files
+            .iter()
+            .filter_map(|i| resolve_path(path, i))
+            .collect())
     }
 
     /// The pages, sorted by F-key then sub-index.
@@ -627,12 +719,17 @@ impl Skin {
                         param,
                     });
                 }
+                Widget::Arrow { colour } => out.items.push(Item::Arrow {
+                    rect,
+                    colour: *colour,
+                }),
                 Widget::Button {
                     on,
                     off,
                     id,
                     group,
                     handle,
+                    lamp,
                 } => {
                     let param = bound(handle);
                     let value = param.map_or(0.0, |p| params.value(p));
@@ -647,7 +744,7 @@ impl Skin {
                         on: lit,
                         param,
                     });
-                    if buttons_set && param.is_some() {
+                    if buttons_set && param.is_some() && !*lamp {
                         let value = if *group > 1 {
                             *id as f32 / (*group - 1) as f32
                         } else {
@@ -780,7 +877,8 @@ fn instance_gesture(
         return (Gesture::Drag { height: k.rect.h }, false);
     }
     let has_button = def.children.iter().any(|n| {
-        visible(n) && matches!(&n.widget, Widget::Button { handle, .. } if map.contains_key(handle))
+        visible(n)
+            && matches!(&n.widget, Widget::Button { handle, lamp: false, .. } if map.contains_key(handle))
     });
     (Gesture::Select, has_button)
 }
@@ -837,6 +935,22 @@ fn convert_component(c: model::Component) -> Node {
             id: num_field("buttonId", 0.0).max(0.0) as u32,
             group: num_field("numButtonsInGroup", 1.0).max(1.0) as u32,
             handle: handle(),
+            lamp: false,
+        },
+        "Indicator" => Widget::Button {
+            on: str_field("onImage"),
+            off: str_field("offImage"),
+            id: num_field("indicatorId", 0.0).max(0.0) as u32,
+            group: num_field("numIndicatorsInGroup", 1.0).max(1.0) as u32,
+            handle: handle(),
+            lamp: true,
+        },
+        // Only the down arrow has been seen; other shapes draw nothing rather than a placeholder.
+        "Decorator" => match str_field("type").as_str() {
+            "Down Arrow" => Widget::Arrow {
+                colour: Colour::parse(&str_field("foregroundColour")),
+            },
+            _ => Widget::Focus,
         },
         "Label" => {
             let ts = data.get("textStyle").cloned().unwrap_or_default();
@@ -999,6 +1113,86 @@ mod tests {
                 file: "bg.png".into()
             }]
         );
+    }
+
+    #[test]
+    fn paths_resolve_from_the_importing_file() {
+        let r = |b, p| resolve_path(b, p);
+        assert_eq!(
+            r("TUI.json", "../../AKAI Components/Lib.json").as_deref(),
+            Some("../../AKAI Components/Lib.json")
+        );
+        assert_eq!(
+            r("../../AKAI Components/Lib.json", "../Generic/G.json").as_deref(),
+            Some("../../Generic/G.json")
+        );
+        assert_eq!(
+            r("../../AKAI Components/Lib.json", "knob.png").as_deref(),
+            Some("../../AKAI Components/knob.png")
+        );
+        assert_eq!(r("TUI.json", "/usr/share/x.json"), None);
+    }
+
+    #[test]
+    fn imported_definitions_fill_in_with_their_own_images() {
+        let json = r#"{"pageData": {
+          "tabs": [{"tabName": "Main", "componentName": "page"}],
+          "componentDefinitions": {
+            "importFiles": ["../../AKAI Components/Lib.json", "/usr/share/Akai/x.json"],
+            "localComponentDefinitions": [
+            {"key": "page", "value": {"componentsData": [
+                {"componentData": {"name": "K", "type": "knobBlack"},
+                 "handle remapping": {"map": [{"key": "Data", "value": "Parameter 0"}]},
+                 "bounds": {"bounds": "10 10 50 50", "whenVisible": "Always"}}]}}]}}}"#;
+        let mut skin = Skin::parse(json).unwrap();
+        assert_eq!(skin.imports(), ["../../AKAI Components/Lib.json"]);
+        let params: HashMap<u32, ParamState> = HashMap::new();
+        assert!(matches!(
+            skin.draw_list(0, &params)[0],
+            Item::Generic { .. }
+        ));
+        let lib = r#"{"componentDefinitions": {"importFiles": ["../Generic/G.json"],
+          "localComponentDefinitions": [
+            {"key": "knobBlack", "value": {"componentsData": [
+              {"componentData": {"name": "Knob", "type": "Knob",
+                 "data": {"filmStrip": "knob_black.png", "numFrames": 3}},
+               "bounds": {"bounds": "0 0 50 50", "whenVisible": "Always"}}]}},
+            {"key": "page", "value": {"componentsData": []}}]}}"#;
+        let next = skin
+            .add_library("../../AKAI Components/Lib.json", lib)
+            .unwrap();
+        assert_eq!(next, ["../../Generic/G.json"]);
+        let items = skin.draw_list(0, &params);
+        assert!(
+            matches!(&items[0], Item::Knob { file, .. } if file == "../../AKAI Components/knob_black.png"),
+            "{items:?}"
+        );
+        // The skin's own `page` is kept over the library's empty one.
+        assert_eq!(items.len(), 1);
+        assert!(skin
+            .image_files()
+            .contains("../../AKAI Components/knob_black.png"));
+    }
+
+    #[test]
+    fn indicator_lights_and_arrow_draws() {
+        let json = r#"{"pageData": {
+          "tabs": [{"tabName": "Main", "componentName": "page"}],
+          "componentDefinitions": {"localComponentDefinitions": [
+            {"key": "page", "value": {"componentsData": [
+              {"componentData": {"name": "Lamp", "type": "Indicator", "data": {"onImage": "on.png",
+                 "offImage": "off.png", "indicatorId": 1, "numIndicatorsInGroup": 1, "handleName": "Data"}},
+               "bounds": {"bounds": "0 0 10 10", "whenVisible": "Always"}},
+              {"componentData": {"name": "Arrow", "type": "Decorator", "data": {"type": "Down Arrow",
+                 "foregroundColour": "ff00e2ff"}},
+               "bounds": {"bounds": "20 0 8 6", "whenVisible": "Always"}}]}}]}}}"#;
+        let skin = Skin::parse(json).unwrap();
+        let items = skin.draw_list(0, &HashMap::new());
+        assert!(matches!(&items[0], Item::Button { file, on: false, .. } if file == "off.png"));
+        assert!(
+            matches!(&items[1], Item::Arrow { colour, .. } if colour.b == 0xff && colour.r == 0)
+        );
+        assert!(skin.controls(0, &HashMap::new()).is_empty());
     }
 
     #[test]

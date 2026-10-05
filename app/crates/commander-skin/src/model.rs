@@ -10,6 +10,14 @@ pub struct Tui {
     pub page_data: PageData,
 }
 
+/// An imported definition file: definitions only, no pages.
+#[derive(Debug, Clone, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct Library {
+    #[serde(default)]
+    pub component_definitions: ComponentDefinitions,
+}
+
 /// The pages and the component definitions they are built from.
 #[derive(Debug, Clone, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
@@ -41,10 +49,12 @@ pub struct Tab {
     pub initial_size: String,
 }
 
-/// The local definitions; `importFiles` (the device's own overlays) is ignored.
+/// The local definitions, and the definition files imported (paths relative to this file).
 #[derive(Debug, Clone, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct ComponentDefinitions {
+    #[serde(default)]
+    pub import_files: Vec<String>,
     #[serde(default)]
     pub local_component_definitions: Vec<KeyValue>,
 }

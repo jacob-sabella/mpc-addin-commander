@@ -10,6 +10,12 @@ generic widget for the bound parameter, never a blank.
 
 ## Files
 
+`componentDefinitions.importFiles` lists definition files the skin imports, relative to its folder (`../../AKAI
+Components/AKAI Generic Components.json`): files of the same shape without `tabs`, whose definitions fill in what
+the skin doesn't define itself, and which may import more. An image inside one is relative to that file's folder.
+The app follows relative imports (Akai's stock skins build most of their knobs, sliders and menus from them) and
+skips absolute ones.
+
 - `TUI.json`: the pages. Its `pageData.tabs[]` are the pages (`tabName`, `fnKeyIndex` = the F-key the page is on,
   `fnKeySubIndex` = nested page under that F-key, `componentName` = the key of the page's component definition,
   `initialSize` = `"0 0 1280 628"`: the page area, in device pixels, below MPC's own top bar).
@@ -51,6 +57,8 @@ generic widget for the bound parameter, never a blank.
 | `Knob` | `knobType: "FilmStrip"`, `filmStrip`, `numFrames` F, `invert` | the strip is F square frames stacked vertically (frame height = image width); frame = `round(value * (F - 1))`, F-1 minus that when `invert` |
 | `Label` | `textStyle: {font: {name, style, height}, colour, justification, case}`, `type: "Name"` or `"Value"` | `Name`: the bound parameter's name. `Value`: its display text. `colour` is `aarrggbb` hex. `case: "Upper Case"` upper-cases. `justification` is JUCE's: `left`, `right`, `horizontallyCentred` and `top`, `bottom`, `verticallyCentred`. `height` is the font height in px. Fonts: `Titillium Web` and `Roboto` only (bundle both; style `SemiBold`, `Regular`, `Bold`, `Light`) |
 | `Slider` | `sliderType: "TrackAndThumb"`, `direction` (`Vertical` or `Horizontal`), `thumbImage`, `thumbTrackVisible`, `revealedImage` | the thumb PNG at its own size, centred across `bounds` and slid along it: bottom (0) to top (1) when vertical, left to right otherwise. No track is drawn; `revealedImage` is ignored. Seen in Akai's stock skins |
+| `Indicator` | `onImage`, `offImage`, `indicatorId` b, `numIndicatorsInGroup` N | lit like a `Button`, but a press does nothing (a lamp) |
+| `Decorator` | `type: "Down Arrow"`, `foregroundColour` | a down-pointing triangle filling `bounds` in that colour (a menu's arrow); other shapes draw nothing |
 | `Focus` | | nothing |
 | `Meter` | | draw the generic meter bar for the bound parameter |
 
@@ -82,8 +90,10 @@ segmented control, text-only readouts as labels.
 
 Akai's own plugins have skins in the same format, installed beside their content (`<vendor> - MPC - <name>/Plugin
 Skins/`, served by the addin's `/stock/` route) and fetched at run time like a VST's: the repo never holds a copy.
-They use the components above (`Slider` is the one only they use so far) with relative image paths; their
-`importFiles` are the device's own shared definitions and are ignored like a VST skin's. Their values come from
+They use the components above (`Slider`, `Indicator` and `Decorator` only appear in them so far) with relative
+image paths, and import their shared knobs, sliders and menus from `AKAI Components`, `AIR Components` and
+`Generic`. Checked offline on 2026-10-05 against all 114 stock skins on an MPC Key 37 (software 3.9.1.2): every
+page lays out with no component left to the generic widget. Their values come from
 the project file (`docs/PROTOCOL.md`, "The project snapshot"), not from a live instance: an indexed state binds
 value i to `Parameter i`, `Value` labels show the value as 0 to 100 (the engine's display text isn't saved), and
 the panel is read-only. A named state (the older effects) has no index for its names yet and shows on the
