@@ -54,7 +54,18 @@ pub fn show(
                 frame,
                 ..
             } => {
-                let r = to_screen(*rect);
+                let mut r = to_screen(*rect);
+                // A frame smaller than its rect draws at its own size from the rect's top left,
+                // clipped to it (the stock slider's track sits in a rect wider than the slider).
+                if let Some(img) = bundle.images.get(file) {
+                    let (w, h) = (
+                        img.width as f32,
+                        img.height as f32 / (*frames).max(1) as f32,
+                    );
+                    if w < rect.w && h < rect.h {
+                        r = to_screen(commander_skin::Rect::new(rect.x, rect.y, w, h));
+                    }
+                }
                 match app.texture(ctx, &uid, file, Some((*frame, *frames)), bundle) {
                     Some(tex) => {
                         painter.image(tex, r, UV_FULL, Color32::WHITE);

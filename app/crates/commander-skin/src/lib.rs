@@ -10,7 +10,7 @@
 
 pub mod model;
 
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeSet, HashMap, HashSet};
 use std::fmt;
 
 /// The page area a skin lays out, in device pixels.
@@ -438,6 +438,11 @@ enum Widget {
         kind: LabelKind,
         handle: String,
     },
+    /// A `Knob` of `knobType: "ValueSlider"`: the value's text, dragged like a knob.
+    ValueText {
+        style: LabelStyle,
+        handle: String,
+    },
     Focus,
     Meter {
         handle: String,
@@ -475,6 +480,8 @@ impl Widget {
 struct Node {
     name: String,
     rect: Rect,
+    /// `rect` is in fractions of the parent's size.
+    proportional: bool,
     /// `whenVisible: Always`; the focus ring (`WhenFocussed`) is never drawn.
     always: bool,
     conditions: Vec<Condition>,
@@ -627,11 +634,23 @@ impl Skin {
             .position(|p| p.fn_key == fn_key && p.sub_index == sub_index)
     }
 
-    /// Every PNG the skin names, relative to the skin folder.
+    /// Every PNG the skin's pages can draw, relative to the skin folder. Definitions no page
+    /// reaches (most of an imported library) are left out.
     pub fn image_files(&self) -> BTreeSet<String> {
         let mut out = BTreeSet::new();
-        for def in self.definitions.values() {
+        let mut todo: Vec<&str> = self.pages.iter().map(|p| p.definition.as_str()).collect();
+        let mut seen = HashSet::new();
+        while let Some(name) = todo.pop() {
+            if !seen.insert(name) {
+                continue;
+            }
+            let Some(def) = self.definitions.get(name) else {
+                continue;
+            };
             for node in &def.children {
+                if let Widget::Instance { def, .. } = &node.widget {
+                    todo.push(def);
+                }
                 match &node.widget {
                     Widget::Image { file }
                     | Widget::Knob { file, .. }
@@ -655,7 +674,15 @@ impl Skin {
         let mut out = Layout::default();
         if let Some(p) = self.pages.get(page) {
             let map = HashMap::new();
-            self.walk(&p.definition, (0.0, 0.0), &map, false, params, 0, &mut out);
+            self.walk(
+                &p.definition,
+                Rect::new(0.0, 0.0, PAGE_WIDTH, PAGE_HEIGHT),
+                &map,
+                false,
+                params,
+                0,
+                &mut out,
+            );
         }
         out
     }
@@ -674,7 +701,7 @@ impl Skin {
     fn walk(
         &self,
         def_name: &str,
-        origin: (f32, f32),
+        parent: Rect,
         map: &HashMap<String, u32>,
         buttons_set: bool,
         params: &dyn ParamSource,
@@ -692,7 +719,17 @@ impl Skin {
             if !node.always || !node.conditions.iter().all(|c| c.holds(params)) {
                 continue;
             }
-            let rect = node.rect.translate(origin.0, origin.1);
+            let rect = if node.proportional {
+                let r = node.rect;
+                Rect::new(
+                    parent.x + r.x * parent.w,
+                    parent.y + r.y * parent.h,
+                    r.w * parent.w,
+                    r.h * parent.h,
+                )
+            } else {
+                node.rect.translate(parent.x, parent.y)
+            };
             let bound = |handle: &str| map.get(handle).copied();
             match &node.widget {
                 Widget::Image { file } => out.items.push(Item::Image {
@@ -793,6 +830,15 @@ impl Skin {
                         param,
                     });
                 }
+                Widget::ValueText { style, handle } => {
+                    let param = bound(handle);
+                    out.items.push(Item::Label {
+                        rect,
+                        text: param.map_or_else(String::new, |p| params.text(p)),
+                        style: style.clone(),
+                        param,
+                    });
+                }
                 Widget::Focus => {}
                 Widget::Meter { handle } => {
                     let param = bound(handle);
@@ -823,15 +869,7 @@ impl Skin {
                         gesture,
                         name: node.name.clone(),
                     });
-                    self.walk(
-                        child_def,
-                        (rect.x, rect.y),
-                        &inner,
-                        set_buttons,
-                        params,
-                        depth + 1,
-                        out,
-                    );
+                    self.walk(child_def, rect, &inner, set_buttons, params, depth + 1, out);
                 }
             }
         }
@@ -871,7 +909,7 @@ fn instance_gesture(
     let knob = def.children.iter().find(|n| {
         visible(n)
             && matches!(&n.widget, Widget::Knob { handle, .. } | Widget::Slider { handle, .. }
-                if map.contains_key(handle))
+                | Widget::ValueText { handle, .. } if map.contains_key(handle))
     });
     if let Some(k) = knob {
         return (Gesture::Drag { height: k.rect.h }, false);
@@ -898,6 +936,25 @@ fn convert_definition(d: model::Definition) -> Definition {
     }
 }
 
+/// A `textStyle` block.
+fn label_style(data: &serde_json::Value) -> LabelStyle {
+    let ts = data.get("textStyle").cloned().unwrap_or_default();
+    let font = ts.get("font").cloned().unwrap_or_default();
+    let s = |v: &serde_json::Value, k: &str| {
+        v.get(k).and_then(|x| x.as_str()).unwrap_or("").to_string()
+    };
+    LabelStyle {
+        font: FontSpec {
+            name: s(&font, "name"),
+            style: s(&font, "style"),
+            height: font.get("height").and_then(|v| v.as_f64()).unwrap_or(20.0) as f32,
+        },
+        colour: Colour::parse(&s(&ts, "colour")),
+        justification: Justification::parse(&s(&ts, "justification")),
+        uppercase: s(&ts, "case") == "Upper Case",
+    }
+}
+
 fn convert_component(c: model::Component) -> Node {
     let data = &c.component_data.data;
     let str_field = |k: &str| {
@@ -919,6 +976,10 @@ fn convert_component(c: model::Component) -> Node {
     let widget = match kind {
         "Image" => Widget::Image {
             file: str_field("image"),
+        },
+        "Knob" if str_field("knobType") == "ValueSlider" => Widget::ValueText {
+            style: label_style(data),
+            handle: handle(),
         },
         "Knob" => Widget::Knob {
             file: str_field("filmStrip"),
@@ -952,31 +1013,15 @@ fn convert_component(c: model::Component) -> Node {
             },
             _ => Widget::Focus,
         },
-        "Label" => {
-            let ts = data.get("textStyle").cloned().unwrap_or_default();
-            let font = ts.get("font").cloned().unwrap_or_default();
-            let s = |v: &serde_json::Value, k: &str| {
-                v.get(k).and_then(|x| x.as_str()).unwrap_or("").to_string()
-            };
-            Widget::Label {
-                style: LabelStyle {
-                    font: FontSpec {
-                        name: s(&font, "name"),
-                        style: s(&font, "style"),
-                        height: font.get("height").and_then(|v| v.as_f64()).unwrap_or(20.0) as f32,
-                    },
-                    colour: Colour::parse(&s(&ts, "colour")),
-                    justification: Justification::parse(&s(&ts, "justification")),
-                    uppercase: s(&ts, "case") == "Upper Case",
-                },
-                kind: if str_field("type") == "Name" {
-                    LabelKind::Name
-                } else {
-                    LabelKind::Value
-                },
-                handle: handle(),
-            }
-        }
+        "Label" => Widget::Label {
+            style: label_style(data),
+            kind: if str_field("type") == "Name" {
+                LabelKind::Name
+            } else {
+                LabelKind::Value
+            },
+            handle: handle(),
+        },
         "Slider" => Widget::Slider {
             thumb: str_field("thumbImage"),
             vertical: str_field("direction") != "Horizontal",
@@ -998,6 +1043,7 @@ fn convert_component(c: model::Component) -> Node {
     Node {
         name: c.component_data.name,
         rect: Rect::parse(&c.bounds.bounds),
+        proportional: c.bounds.bounds_type == "Proportional",
         always: c.bounds.when_visible != "WhenFocussed",
         conditions: c
             .bounds
@@ -1193,6 +1239,48 @@ mod tests {
             matches!(&items[1], Item::Arrow { colour, .. } if colour.b == 0xff && colour.r == 0)
         );
         assert!(skin.controls(0, &HashMap::new()).is_empty());
+    }
+
+    #[test]
+    fn proportional_bounds_value_text_and_used_images() {
+        let json = r#"{"pageData": {
+          "tabs": [{"tabName": "Main", "componentName": "page"}],
+          "componentDefinitions": {"localComponentDefinitions": [
+            {"key": "page", "value": {"componentsData": [
+              {"componentData": {"name": "Mix", "type": "slider", "data": {}},
+               "handle remapping": {"map": [{"key": "Data", "value": "Parameter 0"}]},
+               "bounds": {"bounds": "100 50 200 100", "whenVisible": "Always"}}]}},
+            {"key": "slider", "value": {
+              "actions": [{"onAction": "Touched", "handler": "Q-Link", "handleName": "Data"}],
+              "componentsData": [
+              {"componentData": {"name": "Track", "type": "Knob", "data": {"knobType": "FilmStrip",
+                 "filmStrip": "track.png", "numFrames": 2, "handleName": "Data"}},
+               "bounds": {"bounds": "180 10 300 300", "whenVisible": "Always"}},
+              {"componentData": {"name": "Text", "type": "Knob", "data": {"knobType": "ValueSlider",
+                 "textStyle": {"font": {"name": "Titillium Web", "height": 55.0}}, "handleName": "Data"}},
+               "bounds": {"bounds": "0.1 0.25 0.5 0.5", "boundsType": "Proportional", "whenVisible": "Always"}}]}},
+            {"key": "spare", "value": {"componentsData": [
+              {"componentData": {"name": "Spare", "type": "Image", "data": {"image": "spare.png"}},
+               "bounds": {"bounds": "0 0 1 1", "whenVisible": "Always"}}]}}]}}}"#;
+        let skin = Skin::parse(json).unwrap();
+        let mut params = HashMap::new();
+        params.insert(
+            0,
+            ParamState {
+                value: 0.5,
+                text: "-3.0 dB".into(),
+                ..Default::default()
+            },
+        );
+        let items = skin.draw_list(0, &params);
+        assert!(matches!(&items[1], Item::Label { rect, text, .. }
+            if *rect == Rect::new(120.0, 75.0, 100.0, 50.0) && text == "-3.0 dB"));
+        assert!(matches!(
+            skin.controls(0, &params)[0].gesture,
+            Gesture::Drag { .. }
+        ));
+        let files: Vec<_> = skin.image_files().into_iter().collect();
+        assert_eq!(files, ["track.png"]);
     }
 
     #[test]

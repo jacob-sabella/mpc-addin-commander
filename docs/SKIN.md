@@ -37,7 +37,10 @@ skips absolute ones.
             "additionalInvalidatingHandles": ["IndexedEnabling/<i>/<N>/Parameter <p>"]}}
 ```
 
-- `bounds` is relative to the parent's origin. The page's children are in page coordinates.
+- `bounds` is relative to the parent's origin. The page's children are in page coordinates. With
+  `"boundsType": "Proportional"` the four numbers are fractions of the parent's size (`0 0 1 1` fills it; the
+  page is 1280 x 628). `Relative` bounds (expressions such as `Label.right - ...`, six uses in the stock skins)
+  are not supported yet and draw at the origin with no size.
 - `type` is either a built-in (below) or the key of a local component definition: a **placed instance** of that
   definition, drawn at `bounds` with the definition's children inside it.
 - Handles bind a component to parameters. `Parameter <n>` is the VST index. A placed instance's `handle remapping`
@@ -54,7 +57,8 @@ skips absolute ones.
 |---|---|---|
 | `Image` | `image` | the PNG at `bounds`, stretched to `w h` (they always match the file) |
 | `Button` | `onImage`, `offImage`, `buttonId` b, `numButtonsInGroup` N | `on` when N > 1 and `round(value * (N - 1)) == b`, or N == 1 and `value >= 0.5`; draw the matching image. The on and off image may be the same file (a stepper arrow) |
-| `Knob` | `knobType: "FilmStrip"`, `filmStrip`, `numFrames` F, `invert` | the strip is F square frames stacked vertically (frame height = image width); frame = `round(value * (F - 1))`, F-1 minus that when `invert` |
+| `Knob` | `knobType: "FilmStrip"`, `filmStrip`, `numFrames` F, `invert` | the strip is F square frames stacked vertically (frame height = image width); frame = `round(value * (F - 1))`, F-1 minus that when `invert`. A frame smaller than `bounds` in both directions draws at its own size from the top left (AIR's slider track sits in a rect wider than the slider) |
+| `Knob` | `knobType: "ValueSlider"`, `textStyle` | the value's display text in that style, like a `Value` label, and dragged like a knob |
 | `Label` | `textStyle: {font: {name, style, height}, colour, justification, case}`, `type: "Name"` or `"Value"` | `Name`: the bound parameter's name. `Value`: its display text. `colour` is `aarrggbb` hex. `case: "Upper Case"` upper-cases. `justification` is JUCE's: `left`, `right`, `horizontallyCentred` and `top`, `bottom`, `verticallyCentred`. `height` is the font height in px. Fonts: `Titillium Web` and `Roboto` only (bundle both; style `SemiBold`, `Regular`, `Bold`, `Light`) |
 | `Slider` | `sliderType: "TrackAndThumb"`, `direction` (`Vertical` or `Horizontal`), `thumbImage`, `thumbTrackVisible`, `revealedImage` | the thumb PNG at its own size, centred across `bounds` and slid along it: bottom (0) to top (1) when vertical, left to right otherwise. No track is drawn; `revealedImage` is ignored. Seen in Akai's stock skins |
 | `Indicator` | `onImage`, `offImage`, `indicatorId` b, `numIndicatorsInGroup` N | lit like a `Button`, but a press does nothing (a lamp) |

@@ -133,6 +133,9 @@ pub struct Bounds {
     /// `"x y w h"` relative to the parent's origin.
     #[serde(default)]
     pub bounds: String,
+    /// `Absolute` (pixels) or `Proportional` (fractions of the parent's size).
+    #[serde(default)]
+    pub bounds_type: String,
     /// `Always` or `WhenFocussed`.
     #[serde(default)]
     pub when_visible: String,
