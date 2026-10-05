@@ -77,6 +77,34 @@
        0,
        0
       ]
+     },
+     "drum": {
+      "instruments": [
+       {},
+       {
+        "mixable": {
+         "inserts": {
+          "effects": [
+           {
+            "plugin": {
+             "version": 1,
+             "plugin": {
+              "version": 2,
+              "description": {
+               "name": "Fake Comp",
+               "manufacturerName": "Test Vendor",
+               "pluginFormatName": "MPC"
+              },
+              "state": "8.zzzz....",
+              "presetName": "Init"
+             }
+            }
+           }
+          ]
+         }
+        }
+       }
+      ]
      }
     },
     "recordArm": false
@@ -201,7 +229,55 @@
        0,
        0,
        0
-      ]
+      ],
+      "inserts": {
+       "effects": [
+        {
+         "plugin": {
+          "version": 1,
+          "plugin": {
+           "version": 2,
+           "description": {
+            "name": "Fake Verb",
+            "manufacturerName": "Test Vendor",
+            "pluginFormatName": "MPC"
+           },
+           "state": "12.ABCDEFGHIJK+",
+           "presetName": "Room"
+          }
+         }
+        },
+        {
+         "plugin": {
+          "version": 1,
+          "plugin": {
+           "description": {
+            "name": "Some VST",
+            "manufacturerName": "x",
+            "pluginFormatName": "VST"
+           },
+           "state": "4.AAAA",
+           "presetName": ""
+          }
+         }
+        },
+        {
+         "plugin": {
+          "version": 1,
+          "plugin": {
+           "version": 2,
+           "description": {
+            "name": "Bad State",
+            "manufacturerName": "Test Vendor",
+            "pluginFormatName": "MPC"
+           },
+           "state": "not base64 \\\" ok",
+           "presetName": ""
+          }
+         }
+        }
+       ]
+      }
      }
     },
     "recordArm": false

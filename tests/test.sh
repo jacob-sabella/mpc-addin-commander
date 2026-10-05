@@ -14,9 +14,12 @@ W="-std=gnu11 -O1 -g -Wall -Wextra -Werror -fno-omit-frame-pointer $VER"
 cc -std=gnu11 -O1 -g -Wall -Wextra -Werror -fPIC -shared -o "$B/fake_plugin.so" tests/fake_plugin.c -ldl
 for san in address,undefined thread; do
   name=${san%%,*}
-  cc $W -fsanitize=$san -DHOOK_DLSYM=commander_dlsym -DHOST_DLSYM=commander_dlsym -o "$B/host_$name" tests/fake_host.c tests/fake_midi.c $SRC -ldl -lpthread
+  cc $W -fsanitize=$san -DHOOK_DLSYM=commander_dlsym -DHOST_DLSYM=commander_dlsym -DSTOCK_TEST_ROOT="\"$PWD/$B/stock\"" \
+    -o "$B/host_$name" tests/fake_host.c tests/fake_midi.c $SRC -ldl -lpthread
   rm -rf "$B/$name"; mkdir -p "$B/$name"; cp "$B/fake_plugin.so" "$B/$name/"
-  TSAN_OPTIONS="halt_on_error=1" python3 tests/test_ws.py "$B/host_$name" "$B/$name/fake_plugin.so"
+  SK="$B/stock/Test Vendor - MPC - Fake Verb/Plugin Skins"; rm -rf "$B/stock"; mkdir -p "$SK"
+  printf '{"pageData":{}}' > "$SK/TUI.json"; printf 'png' > "$SK/knob.png"; printf 'secret' > "$B/stock/secret.txt"
+  STOCK_TEST=1 TSAN_OPTIONS="halt_on_error=1" python3 tests/test_ws.py "$B/host_$name" "$B/$name/fake_plugin.so"
   echo "ok   end to end under $name"
 done
 

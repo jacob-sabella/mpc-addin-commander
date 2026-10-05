@@ -423,6 +423,12 @@ assert tr[1]["plugin"] == {"name": "Chordsmith", "vendor": "jacob-sabella", "for
                            "preset": "Lydian Pad"} and tr[1]["solo"] and tr[1]["record_arm"] and tr[1]["volume"] == 0.45, tr[1]
 assert tr[2]["mute"] and tr[2]["track_mute"] and tr[2]["plugin"]["name"] == "Fake Synth" and tr[0]["plugin"] is None, tr
 assert tr[6]["kind"] == 6 and tr[6]["volume"] == 0.1, tr[6]
+W0 = "/data/tracks[0]/program/drum/instruments[1]/mixable/inserts/effects[0]/plugin/plugin"
+W3 = "/data/tracks[3]/program/mixable/inserts/effects[0]/plugin/plugin"
+assert pr["stock"] == [
+    {"where": W0, "name": "Fake Comp", "vendor": "Test Vendor", "preset": "Init", "state": "8.zzzz...."},
+    {"where": W3, "name": "Fake Verb", "vendor": "Test Vendor", "preset": "Room", "state": "12.ABCDEFGHIJK+"},
+], pr["stock"]   # a VST insert and a state that isn't JUCE base64 are left out
 doc = json.load(urllib.request.urlopen("http://127.0.0.1:%d/project" % PORT))
 assert doc == pr, doc
 assert pr["mtime"] > 0
@@ -430,6 +436,21 @@ open(XPJ, "wb").write(b"not gzip at all")
 st, body, _ = get("/project")
 assert st == 404 and b"project file" in body, (st, body)   # zlib reads a plain file as is: no header
 print("ok   the project snapshot: tempo, sequence, tracks and plugins; a broken file is an error")
+
+if os.environ.get("STOCK_TEST"):   # Akai's own skins, read where they are installed (here the test root)
+    F = "/stock/Test%20Vendor%20-%20MPC%20-%20Fake%20Verb/"
+    st, body, h = get(F + "TUI.json")
+    assert st == 200 and body == b'{"pageData":{}}' and h["ETag"], (st, body)
+    st2, _, _ = get(F + "TUI.json", {"If-None-Match": h["ETag"]})
+    assert st2 == 304, st2
+    st, body, _ = get(F + "knob.png")
+    assert st == 200 and body == b"png", (st, body)
+    for bad in (F + "../../secret.txt", F + "%2e%2e/%2e%2e/secret.txt", "/stock/Test%20Vendor%20-%20MPC%20-%20Nope/TUI.json",
+                "/stock/../stock/Test%20Vendor%20-%20MPC%20-%20Fake%20Verb/TUI.json", "/stock/secret.txt", "/stock/",
+                "/stock/Test%20Vendor%20-%20VST%20-%20Fake%20Verb/TUI.json", F):
+        st, _, _ = get(bad)
+        assert st == 404, (bad, st)
+    print("ok   stock skins: files with an ETag; no other folder, no escape")
 
 # many clients at once, all fed
 many = [Ws() for _ in range(20)]

@@ -2,6 +2,7 @@
 // It is read with the device's own zlib (loaded at run time, never linked), tokenised whole and summarised: the
 // tempo, the current sequence and every track's mixer state and plugin.
 #include "project.h"
+#include <ctype.h>
 #include "addin.h"
 #include <dlfcn.h>
 #include <pthread.h>
@@ -206,6 +207,54 @@ static void track_json(struct sb *b, const char *s, const struct jtok *t, int tr
     sb_puts(b, "}");
 }
 
+// Akai's own plugins (format "MPC": the instruments and effects built into MPC) anywhere in the project: a track's
+// instrument, a track's or pad's insert, a return or submix insert. Their saved state is passed on as written (JUCE
+// base64, which needs no JSON escaping); the app decodes the parameter values from it. It is what MPC last saved.
+static int is_b64(const char *s, int n)
+{
+    for (int i = 0; i < n; i++)
+        if (!isalnum((unsigned char)s[i]) && s[i] != '.' && s[i] != '+') return 0;
+    return 1;
+}
+
+static void stock_walk(struct sb *b, const char *s, const struct jtok *t, int i, char *path, size_t plen, int *count)
+{
+    size_t at = strlen(path);
+    if (t[i].type == J_OBJ) {
+        int desc = json_get(s, t, i, "description"), state = json_get(s, t, i, "state");
+        char fmt[16] = "";
+        int f = desc >= 0 && t[desc].type == J_OBJ ? json_get(s, t, desc, "pluginFormatName") : -1;
+        if (f >= 0 && state >= 0 && t[state].type == J_STR && !json_str(s, t, f, fmt, sizeof fmt) && !strcmp(fmt, "MPC") &&
+            is_b64(s + t[state].start, t[state].end - t[state].start)) {
+            sb_puts(b, *count ? ",{\"where\":" : "{\"where\":");
+            sb_jstr(b, path);
+            sb_puts(b, ",\"name\":");
+            put_str(b, s, t, desc, "name");
+            sb_puts(b, ",\"vendor\":");
+            put_str(b, s, t, desc, "manufacturerName");
+            sb_puts(b, ",\"preset\":");
+            put_str(b, s, t, i, "presetName");
+            sb_puts(b, ",\"state\":\"");
+            sb_raw(b, s + t[state].start, (size_t)(t[state].end - t[state].start));
+            sb_puts(b, "\"}");
+            ++*count;
+            return;
+        }
+        int k = i + 1;
+        for (int m = 0; m < t[i].size; m++, k = t[k + 1].skip) {
+            snprintf(path + at, plen - at, "/%.*s", t[k].end - t[k].start, s + t[k].start);
+            stock_walk(b, s, t, k + 1, path, plen, count);
+        }
+    } else if (t[i].type == J_ARR) {
+        int k = i + 1;
+        for (int m = 0; m < t[i].size; m++, k = t[k].skip) {
+            snprintf(path + at, plen - at, "[%d]", m);
+            stock_walk(b, s, t, k, path, plen, count);
+        }
+    }
+    path[at] = 0;
+}
+
 static void sequence_json(struct sb *b, const char *s, const struct jtok *t, int seqs, int index, double *tempo)
 {
     int item = array_item(t, seqs, index);
@@ -277,6 +326,10 @@ int project_json(struct sb *b)
             track_json(b, s, t, k, m);
         }
     }
+    sb_puts(b, "],\"stock\":[");
+    char where[512] = "/data";
+    int stock = 0;
+    stock_walk(b, s, t, data, where, sizeof where, &stock);
     sb_puts(b, "]}");
     free(t);
     free(s);

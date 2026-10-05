@@ -66,7 +66,9 @@ real-time commands. For the app to follow MPC, enable the port as a MIDI output 
  "tracks": [{"index": 1, "name": "Keys", "kind": 3, "type": "plugin", "colour": 1179392, "track_mute": false,
              "record_arm": false, "mute": false, "solo": false, "volume": 0.45, "pan": 0.5,
              "plugin": {"name": "Chordsmith", "vendor": "jacob-sabella", "format": "VST",
-                        "file": "/storage/Synths/x/x.so", "preset": "Lydian Pad"}}]}
+                        "file": "/storage/Synths/x/x.so", "preset": "Lydian Pad"}}],
+ "stock": [{"where": "/data/tracks[3]/program/mixable/inserts/effects[0]/plugin/plugin", "name": "AIR Reverb",
+            "vendor": "AIR Music Technology", "preset": "Plate", "state": "412.ABCD..."}]}
 ```
 
 The file is the most recent project in MPC's settings (`recentProject1` in `settings=`), or `project=` when set. It
@@ -75,6 +77,15 @@ is what MPC last saved or loaded, not the live state: the app shows it as the pr
 in the file; `type` names the ones seen so far (`drum` 0, `plugin` 3, `audio` 6, `return` 7, `submix` 8, `output` 9,
 `input` 10, else `other`). `mute`, `solo`, `volume` and `pan` are the mixer's; `track_mute` is the sequencer track's.
 `plugin` is `null` for a track without one. A missing or unreadable file is an `error` message (HTTP: 404).
+
+`stock` lists every one of Akai's own plugins in the file (any object whose `description.pluginFormatName` is `MPC`,
+wherever it sits: a track's instrument, an insert, a drum pad's insert, a return), in file order. `where` is its
+path in the file's JSON, `state` the saved state as the file has it: JUCE's base64 (`<bytes>.<chars>`, alphabet
+`.A-Za-z0-9+`, six bits per character, least significant first). The addin passes it through; the app decodes it.
+The newer layout (AIR plugins) is `ACVS`, a size, the 64-byte engine name, then a count N and N float32 values in
+0..1 in parameter order, then the preset. The older layout is a sorted list of name and float32 pairs. A state that
+isn't JUCE base64 is left out. The values are those of the last save: the app's Sync button presses Save on the
+control surface (`surface` with note 0x2A), the user picks Project on the MPC, and the app asks for `project` again.
 
 ## HTTP
 
@@ -85,6 +96,7 @@ in the file; `type` names the ones seen so far (`drum` 0, `plugin` 3, `audio` 6,
 | `GET /plugins` | the `plugins` message as a document, for scripts |
 | `GET /project` | the `project` message as a document |
 | `GET /skin/<id>/<path>` | a file from that plugin's `Plugin Skins/` folder (found as for `skin` above), read-only; `..` and symlinks out of the folder are refused; `ETag` is the file's size and mtime, `If-None-Match` gives 304 |
+| `GET /stock/<folder>/<path>` | a file from a stock plugin's `Plugin Skins/` folder, read-only. `<folder>` is `<vendor> - MPC - <name>` (URL-escaped), looked up in `/usr/share/Akai/Content/Synths`, `/storage/Synths`, `/sdcard/Synths`, `/media/az01-internal/Synths` and `/media/*/Synths`, the first with a `TUI.json`; the same confinement and `ETag` as `/skin`. Akai's files stay on the device: the app caches them locally and never ships them |
 | `GET /` | a short page naming the addin and its version |
 
 Every HTTP reply but the WebSocket is `Connection: close`.

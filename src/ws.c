@@ -9,6 +9,7 @@
 #include "poll.h"
 #include "daw.h"
 #include "project.h"
+#include <dirent.h>
 #include "version.h"
 #include <arpa/inet.h>
 #include <ctype.h>
@@ -404,7 +405,7 @@ static void session(int fd, const char *req)
 // ---- skin files ----
 static int has_tui(const char *dir)
 {
-    char p[700];
+    char p[1300];
     snprintf(p, sizeof p, "%s/TUI.json", dir);
     struct stat st;
     return stat(p, &st) == 0 && S_ISREG(st.st_mode);
@@ -459,6 +460,8 @@ static const char *content_type(const char *path)
     return "application/octet-stream";
 }
 
+static void send_file(int fd, const char *req, const char *dir, const char *sub);
+
 // GET /skin/<id>/<path>: a file under that plugin's Plugin Skins folder.
 static void serve_skin(int fd, const char *req, const char *rest)
 {
@@ -479,8 +482,16 @@ static void serve_skin(int fd, const char *req, const char *rest)
         snprintf(product, sizeof product, "%s", in->product);
     }
     pthread_mutex_unlock(&registry_lock);
-    char dir[600], path[1200], real_dir[PATH_MAX], real_path[PATH_MAX];
-    if (!so[0] || skin_dir(so, vendor, product, dir, sizeof dir) || !realpath(dir, real_dir)) { reply_text(fd, "404 Not Found", "no skin"); return; }
+    char dir[600];
+    if (!so[0] || skin_dir(so, vendor, product, dir, sizeof dir)) { reply_text(fd, "404 Not Found", "no skin"); return; }
+    send_file(fd, req, dir, sub);
+}
+
+// sub (already unescaped and checked for "..") under dir, with an ETag; nothing outside dir, also by symlink.
+static void send_file(int fd, const char *req, const char *dir, const char *sub)
+{
+    char path[1200], real_dir[PATH_MAX], real_path[PATH_MAX];
+    if (!realpath(dir, real_dir)) { reply_text(fd, "404 Not Found", "no skin"); return; }
     snprintf(path, sizeof path, "%s/%s", dir, sub);
     size_t dl = strlen(real_dir);
     if (!realpath(path, real_path) || strncmp(real_path, real_dir, dl) || real_path[dl] != '/') {   // no escape by symlink
@@ -513,6 +524,42 @@ static void serve_skin(int fd, const char *req, const char *rest)
     if (!data || got != (size_t)st.st_size) reply_text(fd, "503 Service Unavailable", "read failed");
     else reply_h(fd, "200 OK", content_type(real_path), extra, data, got);
     free(data);
+}
+
+// GET /stock/<folder>/<path>: a file under "<folder>/Plugin Skins" of one of Akai's own plugins, folder being
+// "<vendor> - MPC - <name>" in the system content or a Synths folder (the AIR instruments install to /storage/Synths).
+// Read from the device at run time, so Akai's skins are never copied into anything we ship.
+static void serve_stock(int fd, const char *req, const char *rest)
+{
+    if (!C.skins) { reply_text(fd, "404 Not Found", "skins are off (skins=0)"); return; }
+    char buf[512];
+    snprintf(buf, sizeof buf, "%s", rest);
+    unescape(buf);
+    char *sub = strchr(buf, '/');
+    if (!sub) { reply_text(fd, "404 Not Found", "not found"); return; }
+    *sub++ = 0;
+    if (!buf[0] || !strstr(buf, " - MPC - ") || !strcmp(buf, "..") || strchr(buf, '\\') || !sub[0] || sub[0] == '/' ||
+        strstr(sub, "..") || strchr(sub, '\\')) { reply_text(fd, "404 Not Found", "not found"); return; }
+    static const char *roots[] = {
+#ifdef STOCK_TEST_ROOT
+        STOCK_TEST_ROOT,
+#endif
+        "/usr/share/Akai/Content/Synths", "/storage/Synths", "/sdcard/Synths",
+                                   "/media/az01-internal/Synths", NULL };
+    char dir[1200];   // a /media name (up to 255) and the folder (up to 511), with room
+    for (int r = 0; roots[r]; r++) {
+        snprintf(dir, sizeof dir, "%s/%s/Plugin Skins", roots[r], buf);
+        if (has_tui(dir)) { send_file(fd, req, dir, sub); return; }
+    }
+    DIR *media = opendir("/media");   // cards and drives: /media/<name>/Synths
+    struct dirent *e;
+    while (media && (e = readdir(media))) {
+        if (e->d_name[0] == '.') continue;
+        snprintf(dir, sizeof dir, "/media/%s/Synths/%s/Plugin Skins", e->d_name, buf);
+        if (has_tui(dir)) { closedir(media); send_file(fd, req, dir, sub); return; }
+    }
+    if (media) closedir(media);
+    reply_text(fd, "404 Not Found", "no skin");
 }
 
 static void serve_info(int fd)
@@ -562,6 +609,8 @@ static void handle(int fd)
         sb_free(&b);
     } else if (!strncmp(target, "/skin/", 6)) {
         serve_skin(fd, req, target + 6);
+    } else if (!strncmp(target, "/stock/", 7)) {
+        serve_stock(fd, req, target + 7);
     } else {
         reply_text(fd, "404 Not Found", "not found");
     }
