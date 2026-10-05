@@ -87,13 +87,12 @@ pub async fn session(model: &Shared, rx: &mut CmdRx, host: &str, port: u16, atte
                                 model.apply(m);
                                 std::mem::take(&mut model.skins_wanted)
                             };
-                            for (id, uid) in wanted {
+                            for want in wanted {
                                 tokio::spawn(super::skin::fetch(
                                     model.clone(),
                                     host.to_string(),
                                     port,
-                                    id,
-                                    uid,
+                                    want,
                                 ));
                             }
                         }

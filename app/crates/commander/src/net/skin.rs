@@ -1,8 +1,9 @@
 //! Fetches a plugin's skin files from the addin into `~/.cache/mpc-commander/<uid>/`, keyed by
-//! ETag, and decodes the PNGs for the panel.
+//! ETag, and decodes the PNGs for the panel. A plugin's skin comes from `/skin/<id>/`, a stock
+//! plugin's from `/stock/<folder>/` (Akai's files: cached on this computer, never shipped).
 
 use super::http;
-use crate::model::{Image, Shared, SkinBundle, SkinState};
+use crate::model::{Image, Shared, SkinBundle, SkinState, SkinWant};
 use anyhow::{anyhow, bail, Context};
 use commander_skin::Skin;
 use std::collections::HashMap;
@@ -12,9 +13,10 @@ use std::sync::Arc;
 /// Files fetched at once.
 const PARALLEL: usize = 4;
 
-pub async fn fetch(model: Shared, host: String, port: u16, id: u32, uid: String) {
+pub async fn fetch(model: Shared, host: String, port: u16, want: SkinWant) {
+    let SkinWant { prefix, uid } = want;
     let dir = crate::config::cache_dir().map(|d| d.join(&uid));
-    match fetch_bundle(&model, &host, port, id, &uid, dir.as_deref()).await {
+    match fetch_bundle(&model, &host, port, &prefix, &uid, dir.as_deref()).await {
         Ok(bundle) => {
             let mut m = model.lock().unwrap();
             m.log(format!(
@@ -36,11 +38,11 @@ async fn fetch_bundle(
     model: &Shared,
     host: &str,
     port: u16,
-    id: u32,
+    prefix: &str,
     uid: &str,
     dir: Option<&Path>,
 ) -> anyhow::Result<SkinBundle> {
-    let tui = fetch_cached(host, port, id, "TUI.json", dir).await?;
+    let tui = fetch_cached(host, port, prefix, "TUI.json", dir).await?;
     let skin = Skin::parse(std::str::from_utf8(&tui).context("TUI.json is not UTF-8")?)?;
     let files: Vec<String> = skin.image_files().into_iter().collect();
     let total = files.len();
@@ -60,8 +62,9 @@ async fn fetch_bundle(
             let file = file.clone();
             let dir = dir.map(Path::to_path_buf);
             let host = host.to_string();
+            let prefix = prefix.to_string();
             tasks.push(tokio::spawn(async move {
-                let bytes = fetch_cached(&host, port, id, &file, dir.as_deref()).await?;
+                let bytes = fetch_cached(&host, port, &prefix, &file, dir.as_deref()).await?;
                 let image = tokio::task::spawn_blocking(move || decode_png(&bytes))
                     .await
                     .map_err(|e| anyhow!("decode task: {e}"))??;
@@ -83,7 +86,7 @@ async fn fetch_bundle(
 async fn fetch_cached(
     host: &str,
     port: u16,
-    id: u32,
+    prefix: &str,
     file: &str,
     dir: Option<&Path>,
 ) -> anyhow::Result<Vec<u8>> {
@@ -101,7 +104,7 @@ async fn fetch_cached(
         _ => None,
     };
     let etag = etag.map(|e| e.trim().to_string()).filter(|e| !e.is_empty());
-    let path = format!("/skin/{id}/{file}");
+    let path = format!("{prefix}/{file}");
     match http::get(host, port, &path, etag.as_deref()).await {
         Ok(r) if r.status == 304 => {
             let c = cached.ok_or_else(|| anyhow!("{file}: 304 without a cache"))?;
@@ -214,7 +217,7 @@ mod tests {
         let (port, req) =
             serve_once("HTTP/1.1 200 OK\r\nETag: \"42-7\"\r\nConnection: close\r\n\r\nbody-one")
                 .await;
-        let got = fetch_cached("127.0.0.1", port, 3, "a b.png", Some(&dir))
+        let got = fetch_cached("127.0.0.1", port, "/skin/3", "a b.png", Some(&dir))
             .await
             .unwrap();
         assert_eq!(got, b"body-one");
@@ -228,7 +231,7 @@ mod tests {
         // 304: the request carried the ETag and the cached body is returned.
         let (port, req) =
             serve_once("HTTP/1.1 304 Not Modified\r\nConnection: close\r\n\r\n").await;
-        let got = fetch_cached("127.0.0.1", port, 3, "a b.png", Some(&dir))
+        let got = fetch_cached("127.0.0.1", port, "/skin/3", "a b.png", Some(&dir))
             .await
             .unwrap();
         assert_eq!(got, b"body-one");
@@ -237,19 +240,21 @@ mod tests {
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let dead = listener.local_addr().unwrap().port();
         drop(listener);
-        let got = fetch_cached("127.0.0.1", dead, 3, "a b.png", Some(&dir))
+        let got = fetch_cached("127.0.0.1", dead, "/skin/3", "a b.png", Some(&dir))
             .await
             .unwrap();
         assert_eq!(got, b"body-one");
-        assert!(fetch_cached("127.0.0.1", dead, 3, "other.png", Some(&dir))
-            .await
-            .is_err());
+        assert!(
+            fetch_cached("127.0.0.1", dead, "/skin/3", "other.png", Some(&dir))
+                .await
+                .is_err()
+        );
         let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[tokio::test]
     async fn refuses_paths_outside_the_skin() {
-        let e = fetch_cached("localhost", 1, 1, "../x.png", None)
+        let e = fetch_cached("localhost", 1, "/skin/1", "../x.png", None)
             .await
             .unwrap_err();
         assert!(e.to_string().contains("refusing"));

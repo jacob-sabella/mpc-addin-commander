@@ -10,6 +10,8 @@
 
 use serde::{Deserialize, Serialize};
 
+pub mod stock;
+
 /// The protocol version this crate speaks (the `protocol` field of `hello`).
 pub const PROTOCOL_VERSION: u32 = 1;
 
@@ -249,6 +251,33 @@ pub struct Project {
     pub sequence: Option<Sequence>,
     #[serde(default)]
     pub tracks: Vec<Track>,
+    /// Akai's own plugins in the file, with their saved state.
+    #[serde(default)]
+    pub stock: Vec<StockPlugin>,
+}
+
+/// One of Akai's own plugins in a project snapshot: where it sits in the file and its state
+/// as of the last save (JUCE base64, decoded by [`stock::State::decode`]).
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
+pub struct StockPlugin {
+    /// Its path in the file's JSON, e.g. `/data/tracks[3]/program/.../plugin/plugin`.
+    #[serde(rename = "where", default)]
+    pub path: String,
+    #[serde(default)]
+    pub name: String,
+    #[serde(default)]
+    pub vendor: String,
+    #[serde(default)]
+    pub preset: String,
+    #[serde(default)]
+    pub state: String,
+}
+
+impl StockPlugin {
+    /// The plugin's folder under `Synths/`, where its skin is: `<vendor> - MPC - <name>`.
+    pub fn folder(&self) -> String {
+        format!("{} - MPC - {}", self.vendor, self.name)
+    }
 }
 
 /// The current sequence of a project snapshot.

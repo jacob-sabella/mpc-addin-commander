@@ -114,6 +114,15 @@ fn fixture_values() {
             let seq = p.sequence.unwrap();
             assert_eq!((seq.bars, seq.loop_start, seq.loop_end), (8, 4, 8));
             assert_eq!(seq.beats_per_bar, Some(4));
+            let stock = &p.stock[0];
+            assert_eq!(stock.folder(), "Test Vendor - MPC - Test Verb");
+            let st = commander_protocol::stock::State::decode(&stock.state).unwrap();
+            assert_eq!(
+                (st.engine.as_str(), st.preset.as_str()),
+                ("Test Engine", "Room")
+            );
+            let values: Vec<f32> = st.values.iter().map(|v| v.1).collect();
+            assert_eq!(values, [0.5, 0.25, 1.0]);
         }
         other => panic!("{other:?}"),
     }

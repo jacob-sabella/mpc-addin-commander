@@ -11,14 +11,17 @@ Two halves:
   plugin), polls their parameters, and serves them with the plugins' own skin files over HTTP and a WebSocket on
   port 6730. It opens an ALSA sequencer port, `MPC Commander`, that MPC treats like any MIDI device: MPC's clock,
   start/stop and MMC come in over it and become transport state, and the app's MIDI and transport commands go out
-  over it into MPC. A project snapshot comes from the most recent project file. Nothing in MPC is patched; the
-  stock instruments are internal to MPC and are not visible.
+  over it into MPC. A project snapshot comes from the most recent project file. Nothing in MPC is patched; Akai's
+  own plugins run inside MPC where the addin can't see them live, so the snapshot carries their saved state and
+  the addin serves their skins from the device.
 - **The desktop app** (`app/`, Rust + egui): connects to the device over Wi-Fi or Ethernet (through an SSH tunnel), renders each plugin from
   its `TUI.json` and PNGs with the live values (or a generic knob panel when a plugin ships no skin), and sends the
   changes back. Around the panels: a transport bar (play, stop, record, continue, bar steps), a timeline of the
   current sequence with its loop and the playhead (click a bar to locate there), the project's tracks (colour,
   type, record arm, mute and solo, volume and pan, plugin and preset), an on-screen keyboard (mouse or computer
-  keys, any channel) and the MIDI arriving from MPC. Up and Down step through the plugin instances.
+  keys, any channel) and the MIDI arriving from MPC. Up and Down step through the plugin instances. Akai's own
+  plugins in the project list below them, drawn with their own skins from the values of the last save, read-only:
+  Sync presses Save on the MPC, you tap Project there, and OK reads the saved project again.
 
 **Status:** the addin passes its offline tests (x86: the hook, poll thread, server, transport and project paths under
 ASan+UBSan and TSan, the real `.so` preloaded into a process named `MPC`, the sequencer port where the build machine

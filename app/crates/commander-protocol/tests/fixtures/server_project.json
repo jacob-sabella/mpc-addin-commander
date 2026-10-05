@@ -8,4 +8,6 @@
             {"index": 1, "name": "Keys", "kind": 3, "type": "plugin", "colour": 1179392, "track_mute": false,
              "record_arm": true, "mute": true, "solo": false, "volume": 0.45, "pan": 0.5,
              "plugin": {"name": "Chordsmith", "vendor": "jacob-sabella", "format": "VST",
-                        "file": "/storage/Synths/x/x.so", "preset": "Lydian Pad"}}]}
+                        "file": "/storage/Synths/x/x.so", "preset": "Lydian Pad"}}],
+ "stock": [{"where": "/data/tracks[0]/program/mixable/inserts/effects[0]/plugin/plugin", "name": "Test Verb",
+            "vendor": "Test Vendor", "preset": "Room", "state": "111.AMjUSA.....UkMGcfTjamklakA......................................................................A....L........vO...f9....9iTu8Va..kTEMUQT4TPMUTA...."}]}

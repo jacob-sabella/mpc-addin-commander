@@ -8,7 +8,7 @@ pub mod panel;
 pub mod theme;
 
 use crate::config::Config;
-use crate::model::{ConnState, Shared, SkinBundle, SkinState, Snapshot};
+use crate::model::{is_stock, ConnState, Instance, Shared, SkinBundle, SkinState, Snapshot};
 use crate::net::{Cmd, CmdTx};
 use commander_protocol::ClientMessage;
 use egui::{Color32, ColorImage, RichText, TextureHandle, TextureId, TextureOptions};
@@ -49,7 +49,13 @@ pub struct App {
     show_midi: bool,
     pub show_keys: bool,
     pub keys: daw::Keys,
+    /// The Sync prompt is open: the Save screen is up on the MPC.
+    syncing: bool,
 }
+
+/// The Save button on the control surface (note 0x2A on its first cable), pressed and released.
+const SAVE_PRESS: [u8; 3] = [0x90, 0x2A, 0x7F];
+const SAVE_RELEASE: [u8; 3] = [0x90, 0x2A, 0x00];
 
 impl App {
     pub fn new(model: Shared, cmd: CmdTx, config: Config) -> Self {
@@ -67,6 +73,7 @@ impl App {
             show_midi: true,
             show_keys: false,
             keys: daw::Keys::default(),
+            syncing: false,
         };
         if app.config.connect_on_start && !app.config.host.is_empty() {
             app.connect();
@@ -78,8 +85,11 @@ impl App {
         let _ = self.cmd.send(Cmd::Send(m));
     }
 
-    /// Sends `set` and shows the value at once.
+    /// Sends `set` and shows the value at once. A stock plugin's values are read-only.
     pub fn set(&mut self, id: u32, i: u32, value: f32) {
+        if is_stock(id) {
+            return;
+        }
         self.model.lock().unwrap().set_local(id, i, value);
         self.send(ClientMessage::Set { id, i, value });
     }
@@ -219,6 +229,8 @@ impl App {
         egui::CentralPanel::default()
             .frame(egui::Frame::new().fill(theme::BASE).inner_margin(8.0))
             .show_inside(ui, |ui| self.centre(ui, &snap));
+        let ctx = ui.ctx().clone();
+        self.sync_prompt(&ctx);
     }
 
     fn connection_bar(&mut self, ui: &mut egui::Ui, snap: &Snapshot) {
@@ -279,6 +291,42 @@ impl App {
         });
     }
 
+    /// Sync: presses Save on the MPC, then waits for the user to save the project there.
+    fn start_sync(&mut self) {
+        self.send(ClientMessage::Surface {
+            bytes: SAVE_PRESS.to_vec(),
+        });
+        self.send(ClientMessage::Surface {
+            bytes: SAVE_RELEASE.to_vec(),
+        });
+        self.syncing = true;
+    }
+
+    /// The prompt Sync leaves open: OK reads the project file again.
+    fn sync_prompt(&mut self, ctx: &egui::Context) {
+        if !self.syncing {
+            return;
+        }
+        egui::Window::new("Sync")
+            .collapsible(false)
+            .resizable(false)
+            .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+            .show(ctx, |ui| {
+                ui.label("The Save screen is open on the MPC.");
+                ui.label("Tap Project there to save it, then press OK.");
+                ui.add_space(8.0);
+                ui.horizontal(|ui| {
+                    if ui.button("OK").clicked() {
+                        self.send(ClientMessage::Project);
+                        self.syncing = false;
+                    }
+                    if ui.button("Cancel").clicked() {
+                        self.syncing = false;
+                    }
+                });
+            });
+    }
+
     fn instance_list(&mut self, ui: &mut egui::Ui, snap: &Snapshot) {
         ui.horizontal(|ui| {
             ui.label(RichText::new("Instances").strong());
@@ -288,19 +336,41 @@ impl App {
             {
                 self.send(ClientMessage::List);
             }
+            if ui
+                .add_enabled(snap.conn.is_connected(), egui::Button::new("Sync"))
+                .on_hover_text("Save the project on the MPC and read Akai's plugins from it again")
+                .clicked()
+            {
+                self.start_sync();
+            }
         });
         ui.separator();
-        if snap.instances.is_empty() {
+        if snap.instances.is_empty() && snap.stock.is_empty() {
             ui.label(RichText::new("No plugin instances").color(theme::SUBTEXT));
         }
         self.select_by_keys(ui, snap);
         egui::ScrollArea::vertical().show(ui, |ui| {
-            for inst in &snap.instances {
+            for (k, inst) in snap.instances.iter().chain(&snap.stock).enumerate() {
                 let p = &inst.plugin;
+                let stock = is_stock(p.id);
+                if stock && k == snap.instances.len() {
+                    ui.add_space(6.0);
+                    ui.label(
+                        RichText::new("Akai plugins, as last saved")
+                            .color(theme::SUBTEXT)
+                            .size(12.0),
+                    );
+                }
                 let selected = self.selected == Some(p.id);
-                let kind = if p.synth { "SYNTH" } else { "FX" };
-                let kind_colour = if p.synth { theme::BLUE } else { theme::PEACH };
-                let text = format!("{}\n{}", p.name, p.vendor);
+                let (kind, kind_colour) = match (stock, p.synth) {
+                    (true, _) => ("SAVED", theme::OVERLAY),
+                    (false, true) => ("SYNTH", theme::BLUE),
+                    (false, false) => ("FX", theme::PEACH),
+                };
+                let text = match &inst.track {
+                    Some(t) => format!("{}\n{}", p.name, t),
+                    None => format!("{}\n{}", p.name, p.vendor),
+                };
                 let resp = ui.add_sized(
                     [ui.available_width(), 40.0],
                     egui::Button::selectable(selected, text),
@@ -329,16 +399,24 @@ impl App {
                     ui.painter().circle_filled(dot, 4.0, colour);
                 }
                 if resp.clicked() {
-                    self.selected = Some(p.id);
-                    self.send(ClientMessage::Subscribe { ids: vec![p.id] });
+                    self.select(p.id);
                 }
             }
         });
     }
 
+    /// Selects an instance; a live one is subscribed to for its display texts.
+    fn select(&mut self, id: u32) {
+        self.selected = Some(id);
+        if !is_stock(id) {
+            self.send(ClientMessage::Subscribe { ids: vec![id] });
+        }
+    }
+
     /// Up and Down move the selection through the instance list while no text field has focus.
     fn select_by_keys(&mut self, ui: &egui::Ui, snap: &Snapshot) {
-        if snap.instances.is_empty() || ui.ctx().egui_wants_keyboard_input() {
+        let all: Vec<&Instance> = snap.instances.iter().chain(&snap.stock).collect();
+        if all.is_empty() || ui.ctx().egui_wants_keyboard_input() {
             return;
         }
         let (up, down) = ui.input(|i| {
@@ -350,20 +428,19 @@ impl App {
         if !up && !down {
             return;
         }
-        let last = snap.instances.len() - 1;
+        let last = all.len() - 1;
         let at = self
             .selected
-            .and_then(|id| snap.instances.iter().position(|i| i.plugin.id == id));
+            .and_then(|id| all.iter().position(|i| i.plugin.id == id));
         let next = match (at, down) {
             (None, true) => 0,
             (None, false) => last,
             (Some(n), true) => (n + 1).min(last),
             (Some(n), false) => n.saturating_sub(1),
         };
-        let id = snap.instances[next].plugin.id;
+        let id = all[next].plugin.id;
         if self.selected != Some(id) {
-            self.selected = Some(id);
-            self.send(ClientMessage::Subscribe { ids: vec![id] });
+            self.select(id);
         }
     }
 
@@ -395,8 +472,26 @@ impl App {
         ui.horizontal(|ui| {
             ui.label(RichText::new(&p.name).strong().size(18.0));
             ui.label(RichText::new(&p.vendor).color(theme::SUBTEXT));
-            ui.label(RichText::new(format!("#{} · uid {}", p.id, p.uid)).color(theme::OVERLAY));
+            if is_stock(p.id) {
+                let mut what = vec!["values as last saved, read-only".to_string()];
+                if let Some(t) = &inst.track {
+                    what.insert(0, t.clone());
+                }
+                if !p.product.is_empty() {
+                    what.push(format!("preset {}", p.product));
+                }
+                ui.label(RichText::new(what.join(" · ")).color(theme::OVERLAY));
+            } else {
+                ui.label(RichText::new(format!("#{} · uid {}", p.id, p.uid)).color(theme::OVERLAY));
+            }
         });
+        if is_stock(p.id) && p.params.is_empty() {
+            ui.label(
+                RichText::new("This plugin's saved state is in a format the app can't read yet")
+                    .color(theme::SUBTEXT),
+            );
+            return;
+        }
         let skin: Option<Arc<SkinBundle>> = match snap.skins.get(&p.uid) {
             Some(SkinState::Ready(b)) => Some(b.clone()),
             Some(SkinState::Loading { done, total }) => {
@@ -562,6 +657,68 @@ mod tests {
         app.selected = Some(4);
         let (generic, _) = run_once_keep(&mut app);
         assert!(generic > empty + 40, "{generic} shapes");
+    }
+
+    #[test]
+    fn stock_plugins_draw_read_only_and_sync_presses_save() {
+        let fixture = std::fs::read_to_string(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../commander-protocol/tests/fixtures/server_project.json"
+        ))
+        .unwrap();
+        let mut m = Model::new();
+        m.conn = ConnState::Connected {
+            host: "h".into(),
+            port: 1,
+        };
+        m.apply(serde_json::from_str(&fixture).unwrap());
+        let uid = m.stock[0].plugin.uid.clone();
+        // A one-fader skin with a 10 x 10 thumb.
+        let skin = commander_skin::Skin::parse(
+            r#"{"pageData": {
+              "tabs": [{"tabName": "Main", "componentName": "page", "initialSize": "0 0 400 300"}],
+              "componentDefinitions": {"localComponentDefinitions": [
+                {"key": "page", "value": {"componentsData": [
+                  {"componentData": {"name": "Fader", "type": "Slider",
+                     "data": {"direction": "Vertical", "thumbImage": "thumb.png"}},
+                   "handle remapping": {"map": []},
+                   "bounds": {"bounds": "10 10 20 200", "whenVisible": "Always"}}]}}]}}}"#,
+        )
+        .unwrap();
+        let mut images = HashMap::new();
+        images.insert(
+            "thumb.png".to_string(),
+            Arc::new(Image {
+                width: 10,
+                height: 10,
+                rgba: vec![255; 400],
+            }),
+        );
+        m.skins
+            .insert(uid, SkinState::Ready(Arc::new(SkinBundle { skin, images })));
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+        let mut app = App::new(
+            Arc::new(Mutex::new(m)),
+            tx,
+            Config {
+                connect_on_start: false,
+                ..Default::default()
+            },
+        );
+        app.select(crate::model::STOCK_ID);
+        run_once_keep(&mut app);
+        assert!(app.textures.len() == 1, "the thumb is drawn");
+        // Read-only: no set, no subscribe.
+        app.set(crate::model::STOCK_ID, 0, 1.0);
+        assert!(rx.try_recv().is_err());
+        app.start_sync();
+        let mut sent = Vec::new();
+        while let Ok(Cmd::Send(ClientMessage::Surface { bytes })) = rx.try_recv() {
+            sent.push(bytes);
+        }
+        assert_eq!(sent, vec![vec![0x90, 0x2A, 0x7F], vec![0x90, 0x2A, 0x00]]);
+        assert!(app.syncing);
+        run_once_keep(&mut app);
     }
 
     fn run_once_keep(app: &mut App) -> (usize, usize) {

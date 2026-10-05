@@ -78,3 +78,13 @@ When a plugin ships no skin, or for a component the renderer does not know, draw
 a grid of knobs with name, value arc and text, parameters whose text is one of a small set of strings as a
 segmented control, text-only readouts as labels.
 
+## Akai's stock plugins
+
+Akai's own plugins have skins in the same format, installed beside their content (`<vendor> - MPC - <name>/Plugin
+Skins/`, served by the addin's `/stock/` route) and fetched at run time like a VST's: the repo never holds a copy.
+They use the components above (`Slider` is the one only they use so far) with relative image paths; their
+`importFiles` are the device's own shared definitions and are ignored like a VST skin's. Their values come from
+the project file (`docs/PROTOCOL.md`, "The project snapshot"), not from a live instance: an indexed state binds
+value i to `Parameter i`, `Value` labels show the value as 0 to 100 (the engine's display text isn't saved), and
+the panel is read-only. A named state (the older effects) has no index for its names yet and shows on the
+generic panel.

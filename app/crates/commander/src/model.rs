@@ -1,7 +1,10 @@
 //! What the app knows: the connection, the instances and their values, the skins, the DAW
 //! state, and the log. The network task writes it, the UI reads it once per frame.
 
-use commander_protocol::{Hello, MidiIn, Param, Plugin, Project, ServerMessage, Transport};
+use commander_protocol::stock::{Layout, State};
+use commander_protocol::{
+    Hello, MidiIn, Param, Plugin, Project, ServerMessage, StockPlugin, Transport,
+};
 use commander_skin::{ParamSource, Skin};
 use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::sync::{Arc, Mutex};
@@ -60,10 +63,79 @@ pub enum SkinState {
     Failed(String),
 }
 
+/// The first id of the stock plugins read from a project snapshot; the addin's ids count up from
+/// 1 and never get near it.
+pub const STOCK_ID: u32 = 0x4000_0000;
+
+/// Whether an instance id is a stock plugin from the project snapshot: values as of the last save,
+/// read-only.
+pub fn is_stock(id: u32) -> bool {
+    id >= STOCK_ID
+}
+
+/// Where a stock plugin's skin comes from, as the skin cache's key.
+pub fn stock_uid(sp: &StockPlugin) -> String {
+    format!("stock/{}", sp.folder())
+}
+
+/// Where the network task fetches a skin's files from (`/skin/<id>` or `/stock/<folder>`), and
+/// the uid it is cached under.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SkinWant {
+    pub prefix: String,
+    pub uid: String,
+}
+
+/// A stock plugin's saved values as an instance: indexed values bind to the skin's parameters,
+/// named ones (whose index is not known) show on the generic panel only.
+fn stock_instance(id: u32, sp: &StockPlugin, track: Option<&str>) -> Instance {
+    let state = State::decode(&sp.state);
+    let indexed = matches!(&state, Some(s) if s.layout == Layout::Indexed);
+    let params = state
+        .map(|s| s.values)
+        .unwrap_or_default()
+        .into_iter()
+        .enumerate()
+        .map(|(i, (name, value))| Param {
+            i: i as u32,
+            name: if name.is_empty() {
+                format!("Parameter {i}")
+            } else {
+                name
+            },
+            label: String::new(),
+            value,
+            // The engine's own display text is not in the file: a plain 0 to 100.
+            text: format!("{:.0}", value * 100.0),
+        })
+        .collect();
+    let mut inst = Instance::new(Plugin {
+        id,
+        name: sp.name.clone(),
+        vendor: sp.vendor.clone(),
+        product: sp.preset.clone(),
+        uid: stock_uid(sp),
+        so: String::new(),
+        skin: indexed,
+        synth: false,
+        params,
+    });
+    inst.track = track.map(str::to_string);
+    inst
+}
+
+/// The track index in a stock plugin's path (`/data/tracks[3]/...`).
+fn track_of(path: &str) -> Option<u32> {
+    let rest = path.split("/tracks[").nth(1)?;
+    rest.split(']').next()?.parse().ok()
+}
+
 /// A plugin instance, plus what the app learnt about its option parameters.
 #[derive(Debug, Clone)]
 pub struct Instance {
     pub plugin: Plugin,
+    /// The track a stock plugin is on, by name.
+    pub track: Option<String>,
     /// The display texts seen per parameter, with the value that showed each: the generic
     /// panel's segmented controls.
     pub options: HashMap<u32, BTreeMap<String, f32>>,
@@ -73,6 +145,7 @@ impl Instance {
     fn new(plugin: Plugin) -> Self {
         let mut inst = Instance {
             plugin,
+            track: None,
             options: HashMap::new(),
         };
         let params = inst.plugin.params.clone();
@@ -141,10 +214,12 @@ pub struct Model {
     pub hello: Option<Hello>,
     pub latency_ms: Option<f32>,
     pub instances: Vec<Instance>,
+    /// Akai's own plugins from the project snapshot, ids from [`STOCK_ID`].
+    pub stock: Vec<Instance>,
     /// Skins by plugin uid.
     pub skins: HashMap<String, SkinState>,
-    /// Instances whose skin has not been requested yet: `(id, uid)`, drained by the network task.
-    pub skins_wanted: Vec<(u32, String)>,
+    /// Skins not requested yet, drained by the network task.
+    pub skins_wanted: Vec<SkinWant>,
     pub transport: Option<Transport>,
     pub project: Option<Project>,
     pub midi_in: VecDeque<MidiIn>,
@@ -159,6 +234,7 @@ pub struct Snapshot {
     pub hello: Option<Hello>,
     pub latency_ms: Option<f32>,
     pub instances: Vec<Instance>,
+    pub stock: Vec<Instance>,
     pub skins: HashMap<String, SkinState>,
     pub transport: Option<Transport>,
     pub project: Option<Project>,
@@ -168,7 +244,10 @@ pub struct Snapshot {
 
 impl Snapshot {
     pub fn instance(&self, id: u32) -> Option<&Instance> {
-        self.instances.iter().find(|i| i.plugin.id == id)
+        self.instances
+            .iter()
+            .chain(&self.stock)
+            .find(|i| i.plugin.id == id)
     }
 }
 
@@ -185,6 +264,7 @@ impl Model {
             hello: None,
             latency_ms: None,
             instances: Vec::new(),
+            stock: Vec::new(),
             skins: HashMap::new(),
             skins_wanted: Vec::new(),
             transport: None,
@@ -201,6 +281,7 @@ impl Model {
             hello: self.hello.clone(),
             latency_ms: self.latency_ms,
             instances: self.instances.clone(),
+            stock: self.stock.clone(),
             skins: self.skins.clone(),
             transport: self.transport.clone(),
             project: self.project.clone(),
@@ -229,6 +310,7 @@ impl Model {
         self.hello = None;
         self.latency_ms = None;
         self.instances.clear();
+        self.stock.clear();
         self.skins_wanted.clear();
         self.transport = None;
         self.project = None;
@@ -241,13 +323,48 @@ impl Model {
         }
     }
 
+    /// Queues a skin fetch unless that skin is loaded, loading or failed already.
+    fn want_skin(&mut self, prefix: String, uid: String) {
+        if !self.skins.contains_key(&uid) {
+            self.skins
+                .insert(uid.clone(), SkinState::Loading { done: 0, total: 0 });
+            self.skins_wanted.push(SkinWant { prefix, uid });
+        }
+    }
+
+    /// Rebuilds the stock plugins from a project snapshot.
+    fn set_stock(&mut self, p: &Project) {
+        self.stock = p
+            .stock
+            .iter()
+            .enumerate()
+            .map(|(k, sp)| {
+                let track = track_of(&sp.path).and_then(|n| {
+                    p.tracks
+                        .iter()
+                        .find(|t| t.index == n)
+                        .map(|t| t.name.as_str())
+                });
+                stock_instance(STOCK_ID + k as u32, sp, track)
+            })
+            .collect();
+        let wanted: Vec<(String, String)> = p
+            .stock
+            .iter()
+            .zip(&self.stock)
+            .filter(|(_, inst)| inst.plugin.skin)
+            .map(|(sp, inst)| (format!("/stock/{}", sp.folder()), inst.plugin.uid.clone()))
+            .collect();
+        for (prefix, uid) in wanted {
+            self.want_skin(prefix, uid);
+        }
+    }
+
     fn add_instance(&mut self, plugin: Plugin) {
         let id = plugin.id;
         let uid = plugin.uid.clone();
-        if plugin.skin && !uid.is_empty() && !self.skins.contains_key(&uid) {
-            self.skins
-                .insert(uid.clone(), SkinState::Loading { done: 0, total: 0 });
-            self.skins_wanted.push((id, uid));
+        if plugin.skin && !uid.is_empty() {
+            self.want_skin(format!("/skin/{id}"), uid);
         }
         match self.instances.iter_mut().find(|i| i.plugin.id == id) {
             Some(existing) => *existing = Instance::new(plugin),
@@ -318,7 +435,13 @@ impl Model {
                 }
             }
             ServerMessage::Project(p) => {
-                self.log(format!("project {:?}: {} track(s)", p.name, p.tracks.len()));
+                self.log(format!(
+                    "project {:?}: {} track(s), {} stock plugin(s)",
+                    p.name,
+                    p.tracks.len(),
+                    p.stock.len()
+                ));
+                self.set_stock(&p);
                 self.project = Some(p);
             }
             ServerMessage::Unknown => {}
@@ -363,7 +486,13 @@ mod tests {
             plugins: vec![plugin(3)],
         });
         assert_eq!(m.instances.len(), 1);
-        assert_eq!(m.skins_wanted, vec![(3, "abcd0001".to_string())]);
+        assert_eq!(
+            m.skins_wanted,
+            vec![SkinWant {
+                prefix: "/skin/3".into(),
+                uid: "abcd0001".into()
+            }]
+        );
         m.apply(ServerMessage::Values {
             id: 3,
             v: vec![
@@ -386,6 +515,51 @@ mod tests {
         m.apply(ServerMessage::PluginRemoved { id: 3 });
         assert_eq!(m.instances.len(), 1);
         assert!(m.log.iter().any(|l| l.contains("removed #3")));
+    }
+
+    #[test]
+    fn stock_plugins_from_the_project() {
+        let fixture = std::fs::read_to_string(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../commander-protocol/tests/fixtures/server_project.json"
+        ))
+        .unwrap();
+        let mut m = Model::new();
+        let msg: ServerMessage = serde_json::from_str(&fixture).unwrap();
+        let ServerMessage::Project(mut p) = msg else {
+            panic!("not a project")
+        };
+        p.stock.push(StockPlugin {
+            path: "/data/tracks[1]/x".into(),
+            name: "Broken".into(),
+            vendor: "Test Vendor".into(),
+            state: "not base64".into(),
+            ..Default::default()
+        });
+        m.apply(ServerMessage::Project(p.clone()));
+        assert_eq!(m.stock.len(), 2);
+        let verb = &m.stock[0];
+        assert!(is_stock(verb.plugin.id) && verb.plugin.skin);
+        assert_eq!(verb.plugin.uid, "stock/Test Vendor - MPC - Test Verb");
+        assert_eq!(verb.track.as_deref(), Some("Drums"));
+        assert_eq!(verb.param(1).unwrap().value, 0.25);
+        assert_eq!(verb.text(1), "25");
+        // An undecodable state still lists, without a skin or values.
+        assert!(!m.stock[1].plugin.skin && m.stock[1].plugin.params.is_empty());
+        assert_eq!(m.stock[1].track.as_deref(), Some("Keys"));
+        assert_eq!(
+            m.skins_wanted,
+            vec![SkinWant {
+                prefix: "/stock/Test Vendor - MPC - Test Verb".into(),
+                uid: "stock/Test Vendor - MPC - Test Verb".into()
+            }]
+        );
+        // A second snapshot replaces the list and fetches nothing again.
+        m.skins_wanted.clear();
+        m.apply(ServerMessage::Project(p));
+        assert_eq!(m.stock.len(), 2);
+        assert!(m.skins_wanted.is_empty());
+        assert!(m.snapshot().instance(STOCK_ID).is_some());
     }
 
     #[test]
