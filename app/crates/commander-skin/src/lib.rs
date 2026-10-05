@@ -247,6 +247,15 @@ pub enum Item {
         on: bool,
         param: Option<u32>,
     },
+    /// A track-and-thumb slider: the PNG `thumb` at its natural size, slid along `rect` by
+    /// `value` (bottom to top when `vertical`, left to right otherwise).
+    Slider {
+        rect: Rect,
+        thumb: String,
+        vertical: bool,
+        value: f32,
+        param: Option<u32>,
+    },
     /// `text` in `style`, inside `rect`.
     Label {
         rect: Rect,
@@ -275,6 +284,7 @@ impl Item {
             Item::Image { rect, .. }
             | Item::Knob { rect, .. }
             | Item::Button { rect, .. }
+            | Item::Slider { rect, .. }
             | Item::Label { rect, .. }
             | Item::Meter { rect, .. }
             | Item::Generic { rect, .. } => *rect,
@@ -410,6 +420,11 @@ enum Widget {
         group: u32,
         handle: String,
     },
+    Slider {
+        thumb: String,
+        vertical: bool,
+        handle: String,
+    },
     Label {
         style: LabelStyle,
         kind: LabelKind,
@@ -521,7 +536,9 @@ impl Skin {
         for def in self.definitions.values() {
             for node in &def.children {
                 match &node.widget {
-                    Widget::Image { file } | Widget::Knob { file, .. } => {
+                    Widget::Image { file }
+                    | Widget::Knob { file, .. }
+                    | Widget::Slider { thumb: file, .. } => {
                         out.insert(file.clone());
                     }
                     Widget::Button { on, off, .. } => {
@@ -639,6 +656,20 @@ impl Skin {
                         });
                     }
                 }
+                Widget::Slider {
+                    thumb,
+                    vertical,
+                    handle,
+                } => {
+                    let param = bound(handle);
+                    out.items.push(Item::Slider {
+                        rect,
+                        thumb: thumb.clone(),
+                        vertical: *vertical,
+                        value: param.map_or(0.0, |p| params.value(p)),
+                        param,
+                    });
+                }
                 Widget::Label {
                     style,
                     kind,
@@ -721,7 +752,7 @@ fn resolve_map(entries: &[(String, String)], outer: &HashMap<String, u32>) -> Ha
 /// What a press on a placed instance does, and whether its button children set values.
 ///
 /// A `Toggle Switch` action (on any trigger) flips the `Data` parameter. Otherwise a `Q-Link`
-/// action selects the control: a knob child makes it draggable, button children each set their
+/// action selects the control: a knob or slider child makes it draggable, button children each set their
 /// own value, anything else only selects. No action at all swallows the press.
 fn instance_gesture(
     def: &Definition,
@@ -736,7 +767,9 @@ fn instance_gesture(
     }
     let visible = |n: &Node| n.always && n.conditions.iter().all(|c| c.holds(params));
     let knob = def.children.iter().find(|n| {
-        visible(n) && matches!(&n.widget, Widget::Knob { handle, .. } if map.contains_key(handle))
+        visible(n)
+            && matches!(&n.widget, Widget::Knob { handle, .. } | Widget::Slider { handle, .. }
+                if map.contains_key(handle))
     });
     if let Some(k) = knob {
         return (Gesture::Drag { height: k.rect.h }, false);
@@ -825,6 +858,11 @@ fn convert_component(c: model::Component) -> Node {
                 handle: handle(),
             }
         }
+        "Slider" => Widget::Slider {
+            thumb: str_field("thumbImage"),
+            vertical: str_field("direction") != "Horizontal",
+            handle: handle(),
+        },
         "Focus" => Widget::Focus,
         "Meter" => Widget::Meter { handle: handle() },
         // Anything else names a local definition; one that does not exist draws as `Generic`.
@@ -892,6 +930,48 @@ mod tests {
         let c = Condition::parse("IndexedEnabling/1/2/Parameter 73").unwrap();
         assert_eq!((c.index, c.count, c.param), (1, 2, 73));
         assert!(Condition::parse("Something/1/2/Parameter 3").is_none());
+    }
+
+    #[test]
+    fn slider_draws_its_thumb_and_drags() {
+        let json = r#"{"pageData": {
+          "tabs": [{"tabName": "Main", "fnKeyIndex": 0, "componentName": "page",
+                    "initialSize": "0 0 400 300"}],
+          "componentDefinitions": {"localComponentDefinitions": [
+            {"key": "fader", "value": {
+              "actions": [{"onAction": "Touched", "handler": "Q-Link", "handleName": "Data"}],
+              "componentsData": [
+                {"componentData": {"name": "Thumb", "type": "Slider",
+                   "data": {"sliderType": "TrackAndThumb", "direction": "Vertical",
+                            "thumbImage": "thumb.png", "handleName": "Data"}},
+                 "bounds": {"bounds": "0 0 40 200", "whenVisible": "Always"}}]}},
+            {"key": "page", "value": {"componentsData": [
+                {"componentData": {"name": "Level", "type": "fader"},
+                 "handle remapping": {"map": [{"key": "Data", "value": "Parameter 2"}]},
+                 "bounds": {"bounds": "10 20 40 200", "whenVisible": "Always"}}]}}]}}}"#;
+        let skin = Skin::parse(json).unwrap();
+        assert!(skin.image_files().contains("thumb.png"));
+        let mut params = HashMap::new();
+        params.insert(
+            2,
+            ParamState {
+                value: 0.75,
+                ..Default::default()
+            },
+        );
+        let layout = skin.layout(0, &params);
+        assert_eq!(
+            layout.items,
+            vec![Item::Slider {
+                rect: Rect::new(10.0, 20.0, 40.0, 200.0),
+                thumb: "thumb.png".into(),
+                vertical: true,
+                value: 0.75,
+                param: Some(2),
+            }]
+        );
+        let c = hit(&layout.controls, 20.0, 100.0).unwrap();
+        assert_eq!(c.gesture, Gesture::Drag { height: 200.0 });
     }
 
     #[test]

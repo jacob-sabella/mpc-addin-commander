@@ -62,6 +62,35 @@ pub fn show(
                     None => placeholder(&painter, r),
                 }
             }
+            Item::Slider {
+                rect,
+                thumb,
+                vertical,
+                value,
+                ..
+            } => {
+                let r = to_screen(*rect);
+                let Some(img) = bundle.images.get(thumb) else {
+                    placeholder(&painter, r);
+                    continue;
+                };
+                let size = egui::vec2(img.width as f32, img.height as f32) * scale;
+                let v = value.clamp(0.0, 1.0);
+                let min = if *vertical {
+                    Pos2::new(
+                        r.center().x - size.x / 2.0,
+                        r.bottom() - size.y - (r.height() - size.y).max(0.0) * v,
+                    )
+                } else {
+                    Pos2::new(
+                        r.left() + (r.width() - size.x).max(0.0) * v,
+                        r.center().y - size.y / 2.0,
+                    )
+                };
+                if let Some(tex) = app.texture(ctx, &uid, thumb, None, bundle) {
+                    painter.image(tex, Rect::from_min_size(min, size), UV_FULL, Color32::WHITE);
+                }
+            }
             Item::Label {
                 rect, text, style, ..
             } => draw_label(&painter, to_screen(*rect), text, style, scale),

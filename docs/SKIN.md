@@ -50,6 +50,7 @@ generic widget for the bound parameter, never a blank.
 | `Button` | `onImage`, `offImage`, `buttonId` b, `numButtonsInGroup` N | `on` when N > 1 and `round(value * (N - 1)) == b`, or N == 1 and `value >= 0.5`; draw the matching image. The on and off image may be the same file (a stepper arrow) |
 | `Knob` | `knobType: "FilmStrip"`, `filmStrip`, `numFrames` F, `invert` | the strip is F square frames stacked vertically (frame height = image width); frame = `round(value * (F - 1))`, F-1 minus that when `invert` |
 | `Label` | `textStyle: {font: {name, style, height}, colour, justification, case}`, `type: "Name"` or `"Value"` | `Name`: the bound parameter's name. `Value`: its display text. `colour` is `aarrggbb` hex. `case: "Upper Case"` upper-cases. `justification` is JUCE's: `left`, `right`, `horizontallyCentred` and `top`, `bottom`, `verticallyCentred`. `height` is the font height in px. Fonts: `Titillium Web` and `Roboto` only (bundle both; style `SemiBold`, `Regular`, `Bold`, `Light`) |
+| `Slider` | `sliderType: "TrackAndThumb"`, `direction` (`Vertical` or `Horizontal`), `thumbImage`, `thumbTrackVisible`, `revealedImage` | the thumb PNG at its own size, centred across `bounds` and slid along it: bottom (0) to top (1) when vertical, left to right otherwise. No track is drawn; `revealedImage` is ignored. Seen in Akai's stock skins |
 | `Focus` | | nothing |
 | `Meter` | | draw the generic meter bar for the bound parameter |
 
@@ -62,7 +63,7 @@ A definition's `actions[]` say what a touch of the instance does. The app does t
 
 | `onAction` | `handler` | Meaning | App |
 |---|---|---|---|
-| `Mouse Down` | `Q-Link` | select this control (and, for a `Button` in a group of N, set the value to `buttonId / (N - 1)`; N == 1: 1) | click on a button child: `set` that value. On a `Knob`: drag vertically, `set` continuously (full height = 1.0). Elsewhere: select only |
+| `Mouse Down` | `Q-Link` | select this control (and, for a `Button` in a group of N, set the value to `buttonId / (N - 1)`; N == 1: 1) | click on a button child: `set` that value. On a `Knob` or `Slider`: drag vertically, `set` continuously (full height = 1.0). Elsewhere: select only |
 | `Mouse Down` / `Enter Pressed` | `Toggle Switch` | flip the `Data` parameter between 0 and 1 | click: `set` 1 if value < 0.5 else 0 |
 | `Double Click` / `Enter Pressed` | `Show Overlay` | the device's knob overlay | nothing |
 
@@ -76,3 +77,4 @@ Picking an option sets the parameter; the plugin closes the popup itself.
 When a plugin ships no skin, or for a component the renderer does not know, draw from the parameter list alone:
 a grid of knobs with name, value arc and text, parameters whose text is one of a small set of strings as a
 segmented control, text-only readouts as labels.
+
