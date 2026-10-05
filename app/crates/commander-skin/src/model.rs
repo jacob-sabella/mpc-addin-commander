@@ -74,6 +74,25 @@ pub struct Definition {
     pub actions: Vec<Action>,
     #[serde(default)]
     pub components_data: Vec<Component>,
+    /// What fills the definition's bounds behind its children.
+    #[serde(default)]
+    pub background_data: Option<BackgroundData>,
+}
+
+/// A definition's background, focussed and not; only `unfocussed` is drawn.
+#[derive(Debug, Clone, Deserialize, Default)]
+pub struct BackgroundData {
+    #[serde(default)]
+    pub unfocussed: Background,
+}
+
+/// A background colour (`aarrggbb`) and an image stretched over it.
+#[derive(Debug, Clone, Deserialize, Default)]
+pub struct Background {
+    #[serde(default)]
+    pub colour: String,
+    #[serde(default)]
+    pub image: String,
 }
 
 /// One action of a definition.

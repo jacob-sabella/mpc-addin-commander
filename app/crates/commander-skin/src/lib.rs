@@ -232,6 +232,8 @@ impl ParamSource for HashMap<u32, ParamState> {
 pub enum Item {
     /// The PNG `file`, stretched to `rect`.
     Image { rect: Rect, file: String },
+    /// `rect` filled with `colour` (a definition's background colour).
+    Fill { rect: Rect, colour: Colour },
     /// Frame `frame` of the `frames`-frame vertical filmstrip `file`.
     Knob {
         rect: Rect,
@@ -288,6 +290,7 @@ impl Item {
             | Item::Button { rect, .. }
             | Item::Slider { rect, .. }
             | Item::Arrow { rect, .. }
+            | Item::Fill { rect, .. }
             | Item::Label { rect, .. }
             | Item::Meter { rect, .. }
             | Item::Generic { rect, .. } => *rect,
@@ -401,6 +404,23 @@ impl Condition {
 }
 
 /// `Parameter <n>` to `n`.
+/// Lower case, letters and digits only.
+fn squash(s: &str) -> String {
+    s.chars()
+        .filter(|c| c.is_alphanumeric())
+        .flat_map(char::to_lowercase)
+        .collect()
+}
+
+/// `short`'s letters appear in order in `long`, which starts with the same letter.
+fn abbreviates(short: &str, long: &str) -> bool {
+    if short.chars().next() != long.chars().next() {
+        return false;
+    }
+    let mut rest = long.chars();
+    short.chars().all(|c| rest.any(|l| l == c))
+}
+
 fn parse_parameter(s: &str) -> Option<u32> {
     s.trim().strip_prefix("Parameter ")?.trim().parse().ok()
 }
@@ -426,6 +446,9 @@ enum Widget {
         lamp: bool,
     },
     Arrow {
+        colour: Colour,
+    },
+    Fill {
         colour: Colour,
     },
     Slider {
@@ -634,10 +657,9 @@ impl Skin {
             .position(|p| p.fn_key == fn_key && p.sub_index == sub_index)
     }
 
-    /// Every PNG the skin's pages can draw, relative to the skin folder. Definitions no page
-    /// reaches (most of an imported library) are left out.
-    pub fn image_files(&self) -> BTreeSet<String> {
-        let mut out = BTreeSet::new();
+    /// The definitions the pages reach, through placed instances.
+    fn reachable(&self) -> Vec<&Definition> {
+        let mut out = Vec::new();
         let mut todo: Vec<&str> = self.pages.iter().map(|p| p.definition.as_str()).collect();
         let mut seen = HashSet::new();
         while let Some(name) = todo.pop() {
@@ -651,6 +673,58 @@ impl Skin {
                 if let Widget::Instance { def, .. } = &node.widget {
                     todo.push(def);
                 }
+            }
+            out.push(def);
+        }
+        out
+    }
+
+    /// The parameter each of `names` controls, matched against the names of the placed
+    /// instances that bind `Parameter N`. Saved names can be shortened (`Rels` for a `Release`
+    /// knob): an exact match (ignoring case and anything but letters and digits) wins, then
+    /// one whose letters appear in order in the instance name, starting with the same letter.
+    /// Each parameter is given out once.
+    pub fn bind_names(&self, names: &[String]) -> Vec<Option<u32>> {
+        let mut bound: Vec<(String, u32)> = Vec::new();
+        for def in self.reachable() {
+            for node in &def.children {
+                if let Widget::Instance { map, .. } = &node.widget {
+                    let param = map
+                        .iter()
+                        .find(|(k, _)| k == "Data")
+                        .and_then(|(_, v)| parse_parameter(v));
+                    if let Some(p) = param {
+                        if !bound.iter().any(|(_, q)| *q == p) {
+                            bound.push((squash(&node.name), p));
+                        }
+                    }
+                }
+            }
+        }
+        let wanted: Vec<String> = names.iter().map(|n| squash(n)).collect();
+        let mut out = vec![None; names.len()];
+        let mut taken = HashSet::new();
+        let passes: [fn(&str, &str) -> bool; 2] = [|a, b| a == b, abbreviates];
+        for pass in passes {
+            for (k, w) in wanted.iter().enumerate() {
+                if out[k].is_some() || w.is_empty() {
+                    continue;
+                }
+                if let Some((_, p)) = bound.iter().find(|(b, p)| !taken.contains(p) && pass(w, b)) {
+                    out[k] = Some(*p);
+                    taken.insert(*p);
+                }
+            }
+        }
+        out
+    }
+
+    /// Every PNG the skin's pages can draw, relative to the skin folder. Definitions no page
+    /// reaches (most of an imported library) are left out.
+    pub fn image_files(&self) -> BTreeSet<String> {
+        let mut out = BTreeSet::new();
+        for def in self.reachable() {
+            for node in &def.children {
                 match &node.widget {
                     Widget::Image { file }
                     | Widget::Knob { file, .. }
@@ -757,6 +831,10 @@ impl Skin {
                     });
                 }
                 Widget::Arrow { colour } => out.items.push(Item::Arrow {
+                    rect,
+                    colour: *colour,
+                }),
+                Widget::Fill { colour } => out.items.push(Item::Fill {
                     rect,
                     colour: *colour,
                 }),
@@ -924,11 +1002,30 @@ fn instance_gesture(
 fn convert_definition(d: model::Definition) -> Definition {
     let toggles = d.actions.iter().any(|a| a.handler == "Toggle Switch");
     let qlink = d.actions.iter().any(|a| a.handler == "Q-Link");
-    let children = d
-        .components_data
-        .into_iter()
-        .map(convert_component)
-        .collect();
+    // The background becomes two children drawn first, filling the definition's bounds.
+    let mut children = Vec::new();
+    if let Some(bg) = d.background_data.map(|b| b.unfocussed) {
+        let whole = |widget| Node {
+            name: String::new(),
+            rect: Rect::new(0.0, 0.0, 1.0, 1.0),
+            proportional: true,
+            always: true,
+            conditions: Vec::new(),
+            widget,
+        };
+        // A JUCE colour as hex, `0` being transparent: the shared libraries' components use it.
+        let argb = u32::from_str_radix(bg.colour.trim(), 16).unwrap_or(0);
+        if argb >> 24 > 0 {
+            let [a, r, g, b] = argb.to_be_bytes();
+            children.push(whole(Widget::Fill {
+                colour: Colour { a, r, g, b },
+            }));
+        }
+        if !bg.image.is_empty() {
+            children.push(whole(Widget::Image { file: bg.image }));
+        }
+    }
+    children.extend(d.components_data.into_iter().map(convert_component));
     Definition {
         toggles,
         qlink,
@@ -1281,6 +1378,33 @@ mod tests {
         ));
         let files: Vec<_> = skin.image_files().into_iter().collect();
         assert_eq!(files, ["track.png"]);
+    }
+
+    #[test]
+    fn saved_names_bind_to_the_skin_by_name() {
+        let json = r#"{"pageData": {
+          "tabs": [{"tabName": "Main", "componentName": "page"}],
+          "componentDefinitions": {"localComponentDefinitions": [
+            {"key": "page", "value": {
+              "backgroundData": {"unfocussed": {"colour": "ff1e1d1e", "image": "bg.jpg"}},
+              "componentsData": [
+              {"componentData": {"name": "Release", "type": "knob", "data": {}},
+               "handle remapping": {"map": [{"key": "Data", "value": "Parameter 4"}]},
+               "bounds": {"bounds": "0 0 10 10", "whenVisible": "Always"}},
+              {"componentData": {"name": "Dry / Wet", "type": "knob", "data": {}},
+               "handle remapping": {"map": [{"key": "Data", "value": "Parameter 12"}]},
+               "bounds": {"bounds": "0 0 10 10", "whenVisible": "Always"}}]}},
+            {"key": "knob", "value": {
+              "backgroundData": {"unfocussed": {"colour": "0", "image": ""}},
+              "componentsData": []}}]}}}"#;
+        let skin = Skin::parse(json).unwrap();
+        let names = ["DryWet", "Rels", "Ratio"].map(String::from);
+        assert_eq!(skin.bind_names(&names), [Some(12), Some(4), None]);
+        let items = skin.draw_list(0, &HashMap::new());
+        assert!(matches!(&items[0], Item::Fill { rect, colour }
+            if rect.w == PAGE_WIDTH && colour.a == 0xff && colour.r == 0x1e));
+        assert!(matches!(&items[1], Item::Image { file, .. } if file == "bg.jpg"));
+        assert_eq!(items.len(), 2, "a 0 background is transparent: {items:?}");
     }
 
     #[test]

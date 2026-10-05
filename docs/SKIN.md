@@ -64,6 +64,10 @@ skips absolute ones.
 | `Indicator` | `onImage`, `offImage`, `indicatorId` b, `numIndicatorsInGroup` N | lit like a `Button`, but a press does nothing (a lamp) |
 | `Decorator` | `type: "Down Arrow"`, `foregroundColour` | a down-pointing triangle filling `bounds` in that colour (a menu's arrow); other shapes draw nothing |
 | `Focus` | | nothing |
+
+A definition's `backgroundData.unfocussed` (`colour`, `image`) fills its bounds before its children draw: the
+colour (JUCE hex, where `0` is transparent, as the shared libraries write it), then the image stretched over it.
+Stock effects use it for the page's brushed backdrop (`fx_bg.jpg`, a JPEG); `focussed` is not drawn.
 | `Meter` | | draw the generic meter bar for the bound parameter |
 
 Draw order is the list order; later children cover earlier ones. The page's first child is normally the
@@ -100,5 +104,8 @@ image paths, and import their shared knobs, sliders and menus from `AKAI Compone
 page lays out with no component left to the generic widget. Their values come from
 the project file (`docs/PROTOCOL.md`, "The project snapshot"), not from a live instance: an indexed state binds
 value i to `Parameter i`, `Value` labels show the value as 0 to 100 (the engine's display text isn't saved), and
-the panel is read-only. A named state (the older effects) has no index for its names yet and shows on the
-generic panel.
+the panel is read-only. A named state (the older effects) binds each saved name to the placed instance with
+the same name, ignoring case and punctuation, or failing that one whose name contains its letters in order
+(`Rels` → `Release`, `Thresh` → `Threshold`), and takes that instance's `Parameter N`; a name nothing matches
+stays off the skin. Bus Compressor's seven names all bind this way, and its panel matched the device's screen
+(layout, background, knobs, label sizes) on 2026-10-05, apart from the value text.

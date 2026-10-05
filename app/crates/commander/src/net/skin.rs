@@ -29,7 +29,9 @@ pub async fn fetch(model: Shared, host: String, port: u16, want: SkinWant) {
                 bundle.skin.pages().len(),
                 bundle.images.len()
             ));
-            m.skins.insert(uid, SkinState::Ready(Arc::new(bundle)));
+            m.skins
+                .insert(uid.clone(), SkinState::Ready(Arc::new(bundle)));
+            m.bind_named(&uid);
         }
         Err(e) => {
             let mut m = model.lock().unwrap();
@@ -210,7 +212,7 @@ fn store(cached: &Path, etag_path: &Path, r: &http::Response) -> anyhow::Result<
 
 /// Decodes a PNG to straight (non-premultiplied) RGBA.
 pub fn decode_png(bytes: &[u8]) -> anyhow::Result<Image> {
-    let img = image::load_from_memory_with_format(bytes, image::ImageFormat::Png)?.to_rgba8();
+    let img = image::load_from_memory(bytes)?.to_rgba8();
     Ok(Image {
         width: img.width(),
         height: img.height(),

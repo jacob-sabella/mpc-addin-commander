@@ -86,11 +86,13 @@ pub struct SkinWant {
     pub uid: String,
 }
 
-/// A stock plugin's saved values as an instance: indexed values bind to the skin's parameters,
-/// named ones (whose index is not known) show on the generic panel only.
+/// A stock plugin's saved values as an instance: indexed values bind to the skin's parameters;
+/// named ones are numbered in name order until their skin arrives and [`Model::bind_named`]
+/// matches the names to the skin's.
 fn stock_instance(id: u32, sp: &StockPlugin, track: Option<&str>) -> Instance {
     let state = State::decode(&sp.state);
-    let indexed = matches!(&state, Some(s) if s.layout == Layout::Indexed);
+    let named = matches!(&state, Some(s) if s.layout == Layout::Named);
+    let state_ok = state.is_some();
     let params = state
         .map(|s| s.values)
         .unwrap_or_default()
@@ -116,13 +118,17 @@ fn stock_instance(id: u32, sp: &StockPlugin, track: Option<&str>) -> Instance {
         product: sp.preset.clone(),
         uid: stock_uid(sp),
         so: String::new(),
-        skin: indexed,
+        skin: state_ok,
         synth: false,
         params,
     });
     inst.track = track.map(str::to_string);
+    inst.named = named;
     inst
 }
+
+/// Where a named stock value the skin does not bind is numbered from.
+const UNBOUND: u32 = 10_000;
 
 /// The track index in a stock plugin's path (`/data/tracks[3]/...`).
 fn track_of(path: &str) -> Option<u32> {
@@ -136,6 +142,8 @@ pub struct Instance {
     pub plugin: Plugin,
     /// The track a stock plugin is on, by name.
     pub track: Option<String>,
+    /// A stock plugin whose saved values carry names, not indexes.
+    pub named: bool,
     /// The display texts seen per parameter, with the value that showed each: the generic
     /// panel's segmented controls.
     pub options: HashMap<u32, BTreeMap<String, f32>>,
@@ -146,6 +154,7 @@ impl Instance {
         let mut inst = Instance {
             plugin,
             track: None,
+            named: false,
             options: HashMap::new(),
         };
         let params = inst.plugin.params.clone();
@@ -362,7 +371,34 @@ impl Model {
             .map(|(sp, inst)| (format!("/stock/{}", sp.folder()), inst.plugin.uid.clone()))
             .collect();
         for (prefix, uid) in wanted {
-            self.want_skin(prefix, uid);
+            self.want_skin(prefix, uid.clone());
+            self.bind_named(&uid);
+        }
+    }
+
+    /// Gives the named stock plugins on skin `uid` the skin's parameter indexes, by name; a
+    /// name the skin does not bind gets an index past any it uses. Nothing happens until that
+    /// skin is loaded.
+    pub fn bind_named(&mut self, uid: &str) {
+        let Some(SkinState::Ready(bundle)) = self.skins.get(uid) else {
+            return;
+        };
+        let bundle = bundle.clone();
+        for inst in self
+            .stock
+            .iter_mut()
+            .filter(|i| i.named && i.plugin.uid == uid)
+        {
+            let names: Vec<String> = inst.plugin.params.iter().map(|p| p.name.clone()).collect();
+            let bound = bundle.skin.bind_names(&names);
+            for (k, (p, b)) in inst.plugin.params.iter_mut().zip(bound).enumerate() {
+                p.i = b.unwrap_or(UNBOUND + k as u32);
+            }
+            inst.options.clear();
+            let params = inst.plugin.params.clone();
+            for p in &params {
+                inst.learn(p.i, p.value, &p.text);
+            }
         }
     }
 

@@ -102,6 +102,9 @@ pub fn show(
                     painter.image(tex, Rect::from_min_size(min, size), UV_FULL, Color32::WHITE);
                 }
             }
+            Item::Fill { rect, colour: c } => {
+                painter.rect_filled(to_screen(*rect), 0.0, colour(*c));
+            }
             Item::Arrow { rect, colour: c } => {
                 let r = to_screen(*rect);
                 painter.add(egui::Shape::convex_polygon(

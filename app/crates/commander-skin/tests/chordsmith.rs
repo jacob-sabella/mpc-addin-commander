@@ -58,7 +58,12 @@ fn every_page_draws_without_generic_items() {
             .filter(|it| matches!(it, Item::Generic { .. }))
             .collect();
         assert!(generic.is_empty(), "{}: {generic:?}", page.name);
-        match &items[0] {
+        // The page's background colour, if it has one, fills first; then its picture.
+        let first = items
+            .iter()
+            .find(|it| !matches!(it, Item::Fill { .. }))
+            .unwrap();
+        match first {
             Item::Image { rect, file } => {
                 assert_eq!(
                     (rect.x, rect.y, rect.w, rect.h),
