@@ -234,7 +234,7 @@ fn draw_label(painter: &egui::Painter, r: Rect, text: &str, style: &LabelStyle, 
         return;
     }
     let font = FontId::new(
-        (style.font.height * scale).max(1.0),
+        (fonts::size(&style.font) * scale).max(1.0),
         fonts::family(&style.font),
     );
     let (x, ax) = match style.justification.h {

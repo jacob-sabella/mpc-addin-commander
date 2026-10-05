@@ -68,6 +68,16 @@ pub fn family(spec: &FontSpec) -> FontFamily {
     }
 }
 
+/// The egui size (the em) for a skin's font height. JUCE, and so MPC, sizes a font by its ascent
+/// plus descent: 1.521 em for Titillium Web and 1.172 em for Roboto (their `hhea` metrics).
+pub fn size(spec: &FontSpec) -> f32 {
+    let line = match family(spec) {
+        FontFamily::Name(n) if &*n == ROBOTO_BOLD => 1.172,
+        _ => 1.521,
+    };
+    spec.height / line
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -99,6 +109,16 @@ mod tests {
             FontFamily::Name(ROBOTO_BOLD.into())
         );
         assert_eq!(family(&spec("Comic", "Regular")), FontFamily::Proportional);
+    }
+
+    #[test]
+    fn height_is_ascent_plus_descent() {
+        let mut t = spec("Titillium Web", "Regular");
+        t.height = 55.0;
+        assert!((size(&t) - 36.16).abs() < 0.01);
+        let mut r = spec("Roboto", "Bold");
+        r.height = 23.44;
+        assert!((size(&r) - 20.0).abs() < 0.01);
     }
 
     #[test]
