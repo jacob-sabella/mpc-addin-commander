@@ -29,6 +29,12 @@ and revalidated with the addin's ETags, so a device that is offline still shows 
 showed last time. `RUST_LOG=debug` makes the process log chattier; the log pane at the bottom
 keeps the last 200 lines.
 
+    cargo run --release -- --host localhost --shot panel.png [--select "AIR Reverb"] [--page 1] [--size 1280x800]
+
+`--shot` connects, waits up to 30 s for the plugin list (and the selected plugin's skin), renders the window
+off screen into a PNG and exits: a way to check a panel without a display. `--select` picks the first
+instance whose name contains the text, `--page` a skin tab (0 is the first).
+
 ## What the window shows
 
 - Connection bar: host, port, Connect/Disconnect, the connection state, the ping round trip,

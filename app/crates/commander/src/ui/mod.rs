@@ -406,7 +406,7 @@ impl App {
     }
 
     /// Selects an instance; a live one is subscribed to for its display texts.
-    fn select(&mut self, id: u32) {
+    pub fn select(&mut self, id: u32) {
         self.selected = Some(id);
         if !is_stock(id) {
             self.send(ClientMessage::Subscribe { ids: vec![id] });
