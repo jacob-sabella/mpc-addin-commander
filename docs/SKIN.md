@@ -39,8 +39,11 @@ skips absolute ones.
 
 - `bounds` is relative to the parent's origin. The page's children are in page coordinates. With
   `"boundsType": "Proportional"` the four numbers are fractions of the parent's size (`0 0 1 1` fills it; the
-  page is 1280 x 628). `Relative` bounds (expressions such as `Label.right - ...`, six uses in the stock skins)
-  are not supported yet and draw at the origin with no size.
+  page is 1280 x 628). `"boundsType": "Relative"` takes
+  `relativeBounds` instead: `x1, y1, x2, y2`, each an expression of numbers, `+ - * /`, brackets and
+  `<sibling>.<edge>` (`left`, `right`, `top`, `bottom`, `width`, `height`; `parent` is the parent's own box), over
+  siblings placed earlier in the same definition. The stock skins use it six times, all for a menu's arrow at the
+  right of its `Label`. An expression that does not resolve draws at the origin with no size.
 - `type` is either a built-in (below) or the key of a local component definition: a **placed instance** of that
   definition, drawn at `bounds` with the definition's children inside it.
 - Handles bind a component to parameters. `Parameter <n>` is the VST index. A placed instance's `handle remapping`

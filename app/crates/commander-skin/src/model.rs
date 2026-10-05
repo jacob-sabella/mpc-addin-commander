@@ -152,9 +152,13 @@ pub struct Bounds {
     /// `"x y w h"` relative to the parent's origin.
     #[serde(default)]
     pub bounds: String,
-    /// `Absolute` (pixels) or `Proportional` (fractions of the parent's size).
+    /// `Absolute` (pixels), `Proportional` (fractions of the parent's size) or `Relative`.
     #[serde(default)]
     pub bounds_type: String,
+    /// For `Relative`: `x1, y1, x2, y2` as expressions over the siblings' edges
+    /// (`Label.right - (Label.height * .6)`).
+    #[serde(default)]
+    pub relative_bounds: String,
     /// `Always` or `WhenFocussed`.
     #[serde(default)]
     pub when_visible: String,

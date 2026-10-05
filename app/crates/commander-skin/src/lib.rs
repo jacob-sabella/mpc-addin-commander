@@ -404,6 +404,126 @@ impl Condition {
 }
 
 /// `Parameter <n>` to `n`.
+/// `x1, y1, x2, y2`, each an expression over the edges of already placed siblings.
+fn relative_rect(expr: &str, placed: &HashMap<&str, Rect>) -> Option<Rect> {
+    let v: Vec<f32> = expr
+        .split(',')
+        .map(|e| {
+            RelExpr {
+                s: e.as_bytes(),
+                i: 0,
+                placed,
+            }
+            .parse()
+        })
+        .collect::<Option<_>>()?;
+    match v[..] {
+        [x1, y1, x2, y2] => Some(Rect::new(x1, y1, x2 - x1, y2 - y1)),
+        _ => None,
+    }
+}
+
+/// A JUCE relative coordinate: numbers, `+ - * /`, brackets and `<sibling>.<edge>`.
+struct RelExpr<'a> {
+    s: &'a [u8],
+    i: usize,
+    placed: &'a HashMap<&'a str, Rect>,
+}
+
+impl RelExpr<'_> {
+    fn parse(mut self) -> Option<f32> {
+        let v = self.sum()?;
+        self.skip();
+        (self.i == self.s.len()).then_some(v)
+    }
+
+    fn skip(&mut self) {
+        while self.s.get(self.i).is_some_and(|c| c.is_ascii_whitespace()) {
+            self.i += 1;
+        }
+    }
+
+    fn eat(&mut self, c: u8) -> bool {
+        self.skip();
+        let hit = self.s.get(self.i) == Some(&c);
+        if hit {
+            self.i += 1;
+        }
+        hit
+    }
+
+    fn sum(&mut self) -> Option<f32> {
+        let mut v = self.product()?;
+        loop {
+            if self.eat(b'+') {
+                v += self.product()?;
+            } else if self.eat(b'-') {
+                v -= self.product()?;
+            } else {
+                return Some(v);
+            }
+        }
+    }
+
+    fn product(&mut self) -> Option<f32> {
+        let mut v = self.atom()?;
+        loop {
+            if self.eat(b'*') {
+                v *= self.atom()?;
+            } else if self.eat(b'/') {
+                v /= self.atom()?;
+            } else {
+                return Some(v);
+            }
+        }
+    }
+
+    fn atom(&mut self) -> Option<f32> {
+        if self.eat(b'(') {
+            let v = self.sum()?;
+            return self.eat(b')').then_some(v);
+        }
+        if self.eat(b'-') {
+            return Some(-self.atom()?);
+        }
+        self.skip();
+        let start = self.i;
+        let c = *self.s.get(self.i)?;
+        if c.is_ascii_digit() || c == b'.' {
+            while self
+                .s
+                .get(self.i)
+                .is_some_and(|c| c.is_ascii_digit() || *c == b'.')
+            {
+                self.i += 1;
+            }
+            return std::str::from_utf8(&self.s[start..self.i])
+                .ok()?
+                .parse()
+                .ok();
+        }
+        while self
+            .s
+            .get(self.i)
+            .is_some_and(|c| c.is_ascii_alphanumeric() || matches!(c, b'_' | b'.'))
+        {
+            self.i += 1;
+        }
+        let word = std::str::from_utf8(&self.s[start..self.i]).ok()?;
+        let (name, edge) = word.rsplit_once('.')?;
+        let r = self.placed.get(name)?;
+        Some(match edge {
+            "left" | "x" => r.x,
+            "top" | "y" => r.y,
+            "right" => r.x + r.w,
+            "bottom" => r.y + r.h,
+            "width" => r.w,
+            "height" => r.h,
+            _ => return None,
+        })
+    }
+}
+
 /// Lower case, letters and digits only.
 fn squash(s: &str) -> String {
     s.chars()
@@ -505,6 +625,8 @@ struct Node {
     rect: Rect,
     /// `rect` is in fractions of the parent's size.
     proportional: bool,
+    /// `Relative` bounds: corner expressions over the siblings' edges, replacing `rect`.
+    relative: Option<String>,
     /// `whenVisible: Always`; the focus ring (`WhenFocussed`) is never drawn.
     always: bool,
     conditions: Vec<Condition>,
@@ -789,21 +911,28 @@ impl Skin {
         let Some(def) = self.definitions.get(def_name) else {
             return;
         };
+        // Each child's bounds in the parent's own coordinates, for `Relative` siblings after it.
+        let mut placed: HashMap<&str, Rect> = HashMap::new();
+        placed.insert("parent", Rect::new(0.0, 0.0, parent.w, parent.h));
         for node in &def.children {
+            let local = match &node.relative {
+                Some(expr) => relative_rect(expr, &placed).unwrap_or_default(),
+                None if node.proportional => {
+                    let r = node.rect;
+                    Rect::new(
+                        r.x * parent.w,
+                        r.y * parent.h,
+                        r.w * parent.w,
+                        r.h * parent.h,
+                    )
+                }
+                None => node.rect,
+            };
+            placed.entry(node.name.as_str()).or_insert(local);
             if !node.always || !node.conditions.iter().all(|c| c.holds(params)) {
                 continue;
             }
-            let rect = if node.proportional {
-                let r = node.rect;
-                Rect::new(
-                    parent.x + r.x * parent.w,
-                    parent.y + r.y * parent.h,
-                    r.w * parent.w,
-                    r.h * parent.h,
-                )
-            } else {
-                node.rect.translate(parent.x, parent.y)
-            };
+            let rect = local.translate(parent.x, parent.y);
             let bound = |handle: &str| map.get(handle).copied();
             match &node.widget {
                 Widget::Image { file } => out.items.push(Item::Image {
@@ -1009,6 +1138,7 @@ fn convert_definition(d: model::Definition) -> Definition {
             name: String::new(),
             rect: Rect::new(0.0, 0.0, 1.0, 1.0),
             proportional: true,
+            relative: None,
             always: true,
             conditions: Vec::new(),
             widget,
@@ -1141,6 +1271,7 @@ fn convert_component(c: model::Component) -> Node {
         name: c.component_data.name,
         rect: Rect::parse(&c.bounds.bounds),
         proportional: c.bounds.bounds_type == "Proportional",
+        relative: (c.bounds.bounds_type == "Relative").then(|| c.bounds.relative_bounds.clone()),
         always: c.bounds.when_visible != "WhenFocussed",
         conditions: c
             .bounds
@@ -1405,6 +1536,25 @@ mod tests {
             if rect.w == PAGE_WIDTH && colour.a == 0xff && colour.r == 0x1e));
         assert!(matches!(&items[1], Item::Image { file, .. } if file == "bg.jpg"));
         assert_eq!(items.len(), 2, "a 0 background is transparent: {items:?}");
+    }
+
+    #[test]
+    fn relative_bounds_follow_the_sibling() {
+        let mut placed = HashMap::new();
+        placed.insert("Label", Rect::new(15.0, 50.0, 170.0, 100.0));
+        let r = relative_rect(
+            "Label.right - (Label.height * .6), Label.top + Label.height * .2, Label.right, \
+             Label.top + (Label.height * 0.8)",
+            &placed,
+        )
+        .unwrap();
+        assert_eq!(r, Rect::new(125.0, 70.0, 60.0, 60.0));
+        assert_eq!(
+            relative_rect("-1 + 2 * (3 - 1), 0, 4, 2 / 4", &placed),
+            Some(Rect::new(3.0, 0.0, 1.0, 0.5))
+        );
+        assert_eq!(relative_rect("Nope.left, 0, 1, 1", &placed), None);
+        assert_eq!(relative_rect("1, 2, 3", &placed), None);
     }
 
     #[test]
