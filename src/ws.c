@@ -526,6 +526,25 @@ static void send_file(int fd, const char *req, const char *dir, const char *sub)
     free(data);
 }
 
+// A stock skin's file from its folder `dir` (found under `root`), or, for a file the skin names but doesn't hold, from
+// the shared component folders beside it or in the system content, where MPC finds it too.
+static void send_stock(int fd, const char *req, const char *dir, const char *root, const char *sub)
+{
+    static const char *shared[] = { "AIR Components", "AKAI Components", NULL };
+    const char *bases[] = { root, "/usr/share/Akai/Content/Synths", NULL };
+    char p[1300], base[700];
+    struct stat st;
+    snprintf(p, sizeof p, "%s/%s", dir, sub);
+    if (stat(p, &st) == 0 || strchr(sub, '/')) { send_file(fd, req, dir, sub); return; }
+    for (int b = 0; bases[b]; b++)
+        for (int k = 0; shared[k]; k++) {
+            snprintf(base, sizeof base, "%s/%s", bases[b], shared[k]);
+            snprintf(p, sizeof p, "%s/%s", base, sub);
+            if (stat(p, &st) == 0) { send_file(fd, req, base, sub); return; }
+        }
+    send_file(fd, req, dir, sub);
+}
+
 // GET /stock/<folder>/<path>: a file under "<folder>/Plugin Skins" of one of Akai's own plugins, folder being
 // "<vendor> - MPC - <name>" in the system content or a Synths folder (the AIR instruments install to /storage/Synths).
 // Read from the device at run time, so Akai's skins are never copied into anything we ship.
@@ -549,14 +568,20 @@ static void serve_stock(int fd, const char *req, const char *rest)
     char dir[1200];   // a /media name (up to 255) and the folder (up to 511), with room
     for (int r = 0; roots[r]; r++) {
         snprintf(dir, sizeof dir, "%s/%s/Plugin Skins", roots[r], buf);
-        if (has_tui(dir)) { send_file(fd, req, dir, sub); return; }
+        if (has_tui(dir)) { send_stock(fd, req, dir, roots[r], sub); return; }
     }
     DIR *media = opendir("/media");   // cards and drives: /media/<name>/Synths
     struct dirent *e;
     while (media && (e = readdir(media))) {
         if (e->d_name[0] == '.') continue;
         snprintf(dir, sizeof dir, "/media/%s/Synths/%s/Plugin Skins", e->d_name, buf);
-        if (has_tui(dir)) { closedir(media); send_file(fd, req, dir, sub); return; }
+        if (has_tui(dir)) {
+            char root[300];
+            snprintf(root, sizeof root, "/media/%s/Synths", e->d_name);
+            closedir(media);
+            send_stock(fd, req, dir, root, sub);
+            return;
+        }
     }
     if (media) closedir(media);
     reply_text(fd, "404 Not Found", "no skin");
