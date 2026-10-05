@@ -10,6 +10,9 @@
 //!
 //! Both end with the preset: its name and a NUL, `PRESETNAME`, and a u32 of the name's length
 //! with the NUL.
+//!
+//! - **XML** (XYFX): JUCE's `copyXmlToBinary`, `VC2!`, a u32 length and
+//!   `<PluginState><param index="i" value="v"/>...</PluginState>`, no preset. Indexed too.
 
 /// The alphabet of JUCE's `MemoryBlock::toBase64Encoding`.
 const ALPHABET: &[u8; 64] = b".ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+";
@@ -46,6 +49,9 @@ impl State {
 
     /// Parses a decoded `ACVS` block.
     pub fn parse(b: &[u8]) -> Option<State> {
+        if b.len() >= 8 && &b[..4] == b"VC2!" {
+            return xml(&b[8..]);
+        }
         if b.len() < 10 || &b[..4] != b"ACVS" {
             return None;
         }
@@ -68,6 +74,38 @@ impl State {
             values,
         })
     }
+}
+
+/// The XML layout: every `<param index="i" value="v"/>`, ordered by index; a missing index
+/// reads as 0.
+fn xml(b: &[u8]) -> Option<State> {
+    let text = std::str::from_utf8(&b[..b.iter().position(|&c| c == 0).unwrap_or(b.len())]).ok()?;
+    if !text.contains("<PluginState") {
+        return None;
+    }
+    let attr = |tag: &str, name: &str| -> Option<String> {
+        let at = tag.find(&format!("{name}=\""))? + name.len() + 2;
+        Some(tag[at..].split('"').next()?.to_string())
+    };
+    let mut values: Vec<(String, f32)> = Vec::new();
+    for tag in text.split("<param ").skip(1) {
+        let tag = tag.split("/>").next()?;
+        let i: usize = attr(tag, "index")?.parse().ok()?;
+        let v: f32 = attr(tag, "value")?.parse().ok()?;
+        if i >= MAX_VALUES {
+            return None;
+        }
+        if values.len() <= i {
+            values.resize(i + 1, (String::new(), 0.0));
+        }
+        values[i].1 = v;
+    }
+    (!values.is_empty()).then_some(State {
+        layout: Layout::Indexed,
+        engine: String::new(),
+        preset: String::new(),
+        values,
+    })
 }
 
 /// JUCE's `MemoryBlock::fromBase64Encoding`: `<bytes>.<chars>`, six bits per character, least
@@ -254,6 +292,20 @@ mod tests {
                 ("Time".to_string(), 0.125)
             ]
         );
+    }
+
+    #[test]
+    fn xml_layout() {
+        let body = br#"<?xml version="1.0" encoding="UTF-8"?> <PluginState><param index="1" value="0.25"/><param index="0" value="1.0"/><param index="3" value="0.5"/></PluginState>"#;
+        let mut b = b"VC2!".to_vec();
+        b.extend_from_slice(&(body.len() as u32 + 1).to_le_bytes());
+        b.extend_from_slice(body);
+        b.push(0);
+        let st = State::decode(&encode(&b)).unwrap();
+        assert_eq!(st.layout, Layout::Indexed);
+        let got: Vec<f32> = st.values.iter().map(|v| v.1).collect();
+        assert_eq!(got, [1.0, 0.25, 0.0, 0.5]);
+        assert_eq!(State::parse(b"VC2!\x05\0\0\0<a/>\0"), None);
     }
 
     #[test]

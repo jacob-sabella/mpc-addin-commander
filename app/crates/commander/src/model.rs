@@ -339,12 +339,18 @@ impl Model {
             .iter()
             .enumerate()
             .map(|(k, sp)| {
-                let track = track_of(&sp.path).and_then(|n| {
-                    p.tracks
-                        .iter()
-                        .find(|t| t.index == n)
-                        .map(|t| t.name.as_str())
-                });
+                let track = track_of(&sp.path)
+                    .and_then(|n| {
+                        p.tracks
+                            .iter()
+                            .find(|t| t.index == n)
+                            .map(|t| t.name.as_str())
+                    })
+                    .or_else(|| {
+                        sp.path
+                            .contains("/mixer/outputs[")
+                            .then_some("Mixer outputs")
+                    });
                 stock_instance(STOCK_ID + k as u32, sp, track)
             })
             .collect();
@@ -547,6 +553,14 @@ mod tests {
         // An undecodable state still lists, without a skin or values.
         assert!(!m.stock[1].plugin.skin && m.stock[1].plugin.params.is_empty());
         assert_eq!(m.stock[1].track.as_deref(), Some("Keys"));
+        let mut q = Project::default();
+        q.stock.push(StockPlugin {
+            path: "/data/mixer/outputs[0]/mixable/inserts/effects[0]/plugin".into(),
+            ..Default::default()
+        });
+        let mut m2 = Model::new();
+        m2.apply(ServerMessage::Project(q));
+        assert_eq!(m2.stock[0].track.as_deref(), Some("Mixer outputs"));
         assert_eq!(
             m.skins_wanted,
             vec![SkinWant {

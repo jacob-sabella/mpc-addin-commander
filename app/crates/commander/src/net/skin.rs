@@ -10,8 +10,13 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-/// Files fetched at once.
+/// Files fetched at once per skin.
 const PARALLEL: usize = 4;
+/// HTTP requests in flight across every skin: the addin serves `max_clients` connections (6 by
+/// default) and the WebSocket holds one, so a project's worth of stock skins at once must queue.
+static IN_FLIGHT: tokio::sync::Semaphore = tokio::sync::Semaphore::const_new(3);
+/// Tries for a file the addin answers 503 (busy) for.
+const BUSY_TRIES: u32 = 5;
 
 pub async fn fetch(model: Shared, host: String, port: u16, want: SkinWant) {
     let SkinWant { prefix, uid } = want;
@@ -71,9 +76,17 @@ async fn fetch_bundle(
                 Ok::<_, anyhow::Error>((file, image))
             }));
         }
-        for t in tasks {
-            let (file, image) = t.await.map_err(|e| anyhow!("fetch task: {e}"))??;
-            images.insert(file, Arc::new(image));
+        for (t, file) in tasks.into_iter().zip(batch) {
+            // One image the device doesn't have draws as a placeholder; the rest of the skin still loads.
+            match t.await.map_err(|e| anyhow!("fetch task: {e}"))? {
+                Ok((file, image)) => {
+                    images.insert(file, Arc::new(image));
+                }
+                Err(e) => model
+                    .lock()
+                    .unwrap()
+                    .log(format!("skin {uid}: {file}: {e:#}")),
+            }
             done += 1;
             progress(done);
         }
@@ -105,7 +118,21 @@ async fn fetch_cached(
     };
     let etag = etag.map(|e| e.trim().to_string()).filter(|e| !e.is_empty());
     let path = format!("{prefix}/{file}");
-    match http::get(host, port, &path, etag.as_deref()).await {
+    let mut tries = 0;
+    let reply = loop {
+        let r = {
+            let _permit = IN_FLIGHT.acquire().await?;
+            http::get(host, port, &path, etag.as_deref()).await
+        };
+        tries += 1;
+        match r {
+            Ok(r) if r.status == 503 && tries < BUSY_TRIES => {
+                tokio::time::sleep(std::time::Duration::from_millis(200 * tries as u64)).await;
+            }
+            r => break r,
+        }
+    };
+    match reply {
         Ok(r) if r.status == 304 => {
             let c = cached.ok_or_else(|| anyhow!("{file}: 304 without a cache"))?;
             std::fs::read(&c).with_context(|| format!("{}", c.display()))

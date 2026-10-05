@@ -83,7 +83,8 @@ wherever it sits: a track's instrument, an insert, a drum pad's insert, a return
 path in the file's JSON, `state` the saved state as the file has it: JUCE's base64 (`<bytes>.<chars>`, alphabet
 `.A-Za-z0-9+`, six bits per character, least significant first). The addin passes it through; the app decodes it.
 The newer layout (AIR plugins) is `ACVS`, a size, the 64-byte engine name, then a count N and N float32 values in
-0..1 in parameter order, then the preset. The older layout is a sorted list of name and float32 pairs. A state that
+0..1 in parameter order, then the preset. The older layout is a sorted list of name and float32 pairs. XYFX
+saves JUCE's binary XML instead (`VC2!`, a length, `<PluginState><param index="i" value="v"/>...`). A state that
 isn't JUCE base64 is left out. The values are those of the last save: the app's Sync button presses Save on the
 control surface (`surface` with note 0x2A), the user picks Project on the MPC, and the app asks for `project` again.
 
