@@ -33,6 +33,9 @@ pub struct Tab {
     /// The key of the page's component definition.
     #[serde(default)]
     pub component_name: String,
+    /// The page's definition inline, instead of `component_name` (Akai's stock skins).
+    #[serde(default)]
+    pub component_definition: Option<Definition>,
     /// `"x y w h"` of the page area in device pixels.
     #[serde(default)]
     pub initial_size: String,

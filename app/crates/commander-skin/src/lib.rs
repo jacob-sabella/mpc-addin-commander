@@ -488,14 +488,19 @@ impl Skin {
     /// Resolves an already-deserialized document.
     pub fn from_tui(tui: model::Tui) -> Result<Self, Error> {
         let data = tui.page_data;
-        let definitions: HashMap<String, Definition> = data
+        let mut definitions: HashMap<String, Definition> = data
             .component_definitions
             .local_component_definitions
             .into_iter()
             .map(|kv| (kv.key, convert_definition(kv.value)))
             .collect();
         let mut pages = Vec::new();
-        for tab in data.tabs {
+        for (i, mut tab) in data.tabs.into_iter().enumerate() {
+            // An inline definition gets a key no file can use.
+            if let Some(def) = tab.component_definition.take() {
+                tab.component_name = format!("\0tab {i}");
+                definitions.insert(tab.component_name.clone(), convert_definition(def));
+            }
             if !definitions.contains_key(&tab.component_name) {
                 return Err(Error::MissingDefinition {
                     page: tab.tab_name,
@@ -972,6 +977,28 @@ mod tests {
         );
         let c = hit(&layout.controls, 20.0, 100.0).unwrap();
         assert_eq!(c.gesture, Gesture::Drag { height: 200.0 });
+    }
+
+    #[test]
+    fn a_tab_can_hold_its_definition_inline() {
+        let json = r#"{"pageData": {
+          "tabs": [{"tabName": "Main", "fnKeyIndex": 0, "componentDefinition": {
+              "componentsData": [
+                {"componentData": {"name": "Bg", "type": "Image", "data": {"image": "bg.png"}},
+                 "bounds": {"bounds": "0 0 1280 628", "whenVisible": "Always"}}]}}],
+          "componentDefinitions": {"localComponentDefinitions": []}}}"#;
+        let skin = Skin::parse(json).unwrap();
+        assert_eq!(
+            skin.pages()[0].size,
+            Rect::new(0.0, 0.0, PAGE_WIDTH, PAGE_HEIGHT)
+        );
+        assert_eq!(
+            skin.draw_list(0, &HashMap::new()),
+            vec![Item::Image {
+                rect: Rect::new(0.0, 0.0, 1280.0, 628.0),
+                file: "bg.png".into()
+            }]
+        );
     }
 
     #[test]
