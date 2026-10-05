@@ -20,6 +20,9 @@ for san in address,undefined thread; do
   SK="$B/stock/Test Vendor - MPC - Fake Verb/Plugin Skins"; rm -rf "$B/stock"; mkdir -p "$SK"
   printf '{"pageData":{}}' > "$SK/TUI.json"; printf 'png' > "$SK/knob.png"; printf 'secret' > "$B/stock/secret.txt"
   mkdir -p "$B/stock/AIR Components"; printf 'shared' > "$B/stock/AIR Components/shared.png"
+  mkdir -p "$B/stock/AKAI Components" "$B/stock/Other - MPC - Kit/Plugin Skins"
+  printf '{"defs":1}' > "$B/stock/AKAI Components/Shared.json"; printf '{"kit":1}' > "$B/stock/Other - MPC - Kit/Plugin Skins/Kit.json"
+  printf '{}' > "$B/stock/Other - MPC - Kit/TUI.json"
   STOCK_TEST=1 TSAN_OPTIONS="halt_on_error=1" python3 tests/test_ws.py "$B/host_$name" "$B/$name/fake_plugin.so"
   echo "ok   end to end under $name"
 done

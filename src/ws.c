@@ -528,8 +528,33 @@ static void send_file(int fd, const char *req, const char *dir, const char *sub)
 
 // A stock skin's file from its folder `dir` (found under `root`), or, for a file the skin names but doesn't hold, from
 // the shared component folders beside it or in the system content, where MPC finds it too.
+// A definition file a stock skin imports, `../../<D>/<path>` from its Plugin Skins folder: D is one of the shared
+// folders, or another stock plugin's folder (then <path> is in its Plugin Skins). Served from `root` or the system content.
+static void send_import(int fd, const char *req, const char *root, const char *rel)
+{
+    char d[256];
+    const char *slash = strchr(rel, '/');
+    if (!slash || (size_t)(slash - rel) >= sizeof d) { reply_text(fd, "404 Not Found", "not found"); return; }
+    memcpy(d, rel, (size_t)(slash - rel));
+    d[slash - rel] = 0;
+    const char *path = slash + 1;
+    int shared = !strcmp(d, "AIR Components") || !strcmp(d, "AKAI Components") || !strcmp(d, "Generic");
+    if ((!shared && !(strstr(d, " - MPC - ") && !strncmp(path, "Plugin Skins/", 13))) || !path[0] || strstr(path, "..") ||
+        strchr(path, '\\')) { reply_text(fd, "404 Not Found", "not found"); return; }
+    const char *bases[] = { root, "/usr/share/Akai/Content/Synths", NULL };
+    char dir[800], p[1300];
+    struct stat st;
+    for (int b = 0; bases[b]; b++) {
+        snprintf(dir, sizeof dir, "%s/%s", bases[b], d);
+        snprintf(p, sizeof p, "%s/%s", dir, path);
+        if (stat(p, &st) == 0) { send_file(fd, req, dir, path); return; }
+    }
+    reply_text(fd, "404 Not Found", "not found");
+}
+
 static void send_stock(int fd, const char *req, const char *dir, const char *root, const char *sub)
 {
+    if (!strncmp(sub, "../../", 6)) { send_import(fd, req, root, sub + 6); return; }
     static const char *shared[] = { "AIR Components", "AKAI Components", NULL };
     const char *bases[] = { root, "/usr/share/Akai/Content/Synths", NULL };
     char p[1300], base[700];
@@ -557,8 +582,9 @@ static void serve_stock(int fd, const char *req, const char *rest)
     char *sub = strchr(buf, '/');
     if (!sub) { reply_text(fd, "404 Not Found", "not found"); return; }
     *sub++ = 0;
-    if (!buf[0] || !strstr(buf, " - MPC - ") || !strcmp(buf, "..") || strchr(buf, '\\') || !sub[0] || sub[0] == '/' ||
-        strstr(sub, "..") || strchr(sub, '\\')) { reply_text(fd, "404 Not Found", "not found"); return; }
+    const char *own = !strncmp(sub, "../../", 6) ? sub + 6 : sub;   // an import: checked by send_import
+    if (!buf[0] || !strstr(buf, " - MPC - ") || !strcmp(buf, "..") || strchr(buf, '\\') || !own[0] || own[0] == '/' ||
+        (own == sub && strstr(sub, "..")) || strchr(sub, '\\')) { reply_text(fd, "404 Not Found", "not found"); return; }
     static const char *roots[] = {
 #ifdef STOCK_TEST_ROOT
         STOCK_TEST_ROOT,

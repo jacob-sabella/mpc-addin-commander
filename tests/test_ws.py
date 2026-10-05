@@ -447,13 +447,20 @@ if os.environ.get("STOCK_TEST"):   # Akai's own skins, read where they are insta
     assert st == 200 and body == b"png", (st, body)
     st, body, _ = get(F + "shared.png")   # named by the skin, held in the shared components folder
     assert st == 200 and body == b"shared", (st, body)
+    # imports, as the skin names them: ../../ from its Plugin Skins folder
+    st, body, _ = get(F + "../../AKAI%20Components/Shared.json")
+    assert st == 200 and body == b'{"defs":1}', (st, body)
+    st, body, _ = get(F + "%2e%2e/%2e%2e/Other%20-%20MPC%20-%20Kit/Plugin%20Skins/Kit.json")
+    assert st == 200 and body == b'{"kit":1}', (st, body)
     for bad in (F + "../../secret.txt", F + "%2e%2e/%2e%2e/secret.txt", "/stock/Test%20Vendor%20-%20MPC%20-%20Nope/TUI.json",
                 "/stock/../stock/Test%20Vendor%20-%20MPC%20-%20Fake%20Verb/TUI.json", "/stock/secret.txt", "/stock/",
                 "/stock/Test%20Vendor%20-%20VST%20-%20Fake%20Verb/TUI.json", F, F + "nope.png",
-                "/stock/AIR%20Components/shared.png"):
+                "/stock/AIR%20Components/shared.png", F + "../../Elsewhere/x.json", F + "../../../secret.txt",
+                F + "../../AKAI%20Components/../secret.txt", F + "../../Other%20-%20MPC%20-%20Kit/TUI.json",
+                F + "../../AKAI%20Components/", F + "../../AKAI%20Components"):
         st, _, _ = get(bad)
         assert st == 404, (bad, st)
-    print("ok   stock skins: files with an ETag, shared components; no other folder, no escape")
+    print("ok   stock skins: files with an ETag, shared components, imports; no other folder, no escape")
 
 # many clients at once, all fed
 many = [Ws() for _ in range(20)]
