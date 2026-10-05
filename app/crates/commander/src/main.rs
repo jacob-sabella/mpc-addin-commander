@@ -10,6 +10,7 @@ mod model;
 mod net;
 mod shell;
 mod shot;
+mod stock_text;
 mod ui;
 
 use std::sync::{Arc, Mutex};

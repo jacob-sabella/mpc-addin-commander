@@ -1,0 +1,22 @@
+# Display text for Akai's stock plugins, whose saved state holds each value as 0 to 1 and not the text MPC
+# shows. A table per plugin (its name as MPC saves it), a key per parameter: the saved name for a named state
+# (the older Akai effects), `Parameter N` for an indexed one.
+#
+#   min, max   the value is linear from min (0) to max (1); text is that number
+#   decimals   digits after the point (default 0)
+#   unit       appended after a space
+#   options    the value picks one of these, evenly spaced (a switch: ["Off", "On"])
+#
+# Only add an entry checked against MPC's own screen, with the saved value it showed, and say where in
+# docs/SKIN.md ("Akai's stock plugins"). A parameter with no entry shows its value as 0 to 100.
+
+# Checked on an MPC Key 37, software 3.9.1.2, 2026-10-05: saved 0.1333 showed -2 (Output), 0.84 showed -8
+# (Thresh), 0 showed 1 (Ratio) and Off (Oldskool), 0.5 showed 50, 1 showed 100.
+["Bus Compressor"]
+DryWet = { min = 0, max = 100 }
+Attack = { min = 0, max = 100 }
+Rels = { min = 0, max = 100 }
+Thresh = { min = -50, max = 0 }
+Ratio = { min = 1, max = 20 }
+Oldskool = { options = ["Off", "On"] }
+Output = { min = -6, max = 24 }

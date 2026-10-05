@@ -103,7 +103,10 @@ image paths, and import their shared knobs, sliders and menus from `AKAI Compone
 `Generic`. Checked offline on 2026-10-05 against all 114 stock skins on an MPC Key 37 (software 3.9.1.2): every
 page lays out with no component left to the generic widget. Their values come from
 the project file (`docs/PROTOCOL.md`, "The project snapshot"), not from a live instance: an indexed state binds
-value i to `Parameter i`, `Value` labels show the value as 0 to 100 (the engine's display text isn't saved), and
+value i to `Parameter i`, `Value` labels show what `app/crates/commander/assets/stock_params.toml` makes of the value (a linear range,
+unit or option words per parameter, only for parameters checked against MPC's screen: Bus Compressor so far), else
+the value as 0 to 100 (the engine's display text isn't saved; the saved value is linear 0 to 1 over the range
+printed on the knob, checked on Bus Compressor on 2026-10-05), and
 the panel is read-only. A named state (the older effects) binds each saved name to the placed instance with
 the same name, ignoring case and punctuation, or failing that one whose name contains its letters in order
 (`Rels` → `Release`, `Thresh` → `Threshold`), and takes that instance's `Parameter N`; a name nothing matches

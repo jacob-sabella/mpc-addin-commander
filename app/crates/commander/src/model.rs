@@ -98,17 +98,23 @@ fn stock_instance(id: u32, sp: &StockPlugin, track: Option<&str>) -> Instance {
         .unwrap_or_default()
         .into_iter()
         .enumerate()
-        .map(|(i, (name, value))| Param {
-            i: i as u32,
-            name: if name.is_empty() {
+        .map(|(i, (name, value))| {
+            let name = if name.is_empty() {
                 format!("Parameter {i}")
             } else {
                 name
-            },
-            label: String::new(),
-            value,
-            // The engine's own display text is not in the file: a plain 0 to 100.
-            text: format!("{:.0}", value * 100.0),
+            };
+            // The engine's own display text is not in the file: the table's reading of the
+            // value where it has one, else a plain 0 to 100.
+            let text = crate::stock_text::text(&sp.name, &name, value)
+                .unwrap_or_else(|| format!("{:.0}", value * 100.0));
+            Param {
+                i: i as u32,
+                name,
+                label: String::new(),
+                value,
+                text,
+            }
         })
         .collect();
     let mut inst = Instance::new(Plugin {
