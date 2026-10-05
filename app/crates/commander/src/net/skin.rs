@@ -48,7 +48,29 @@ async fn fetch_bundle(
     dir: Option<&Path>,
 ) -> anyhow::Result<SkinBundle> {
     let tui = fetch_cached(host, port, prefix, "TUI.json", dir).await?;
-    let skin = Skin::parse(std::str::from_utf8(&tui).context("TUI.json is not UTF-8")?)?;
+    let mut skin = Skin::parse(std::str::from_utf8(&tui).context("TUI.json is not UTF-8")?)?;
+    // The definition files it imports, and theirs; one that won't load leaves its components
+    // to the generic widget.
+    let mut queue: Vec<String> = skin.imports().to_vec();
+    let mut seen = std::collections::HashSet::new();
+    while let Some(file) = queue.pop() {
+        if !seen.insert(file.clone()) || seen.len() > 16 {
+            continue;
+        }
+        let loaded = match fetch_cached(host, port, prefix, &file, dir).await {
+            Ok(bytes) => String::from_utf8(bytes)
+                .map_err(|_| anyhow!("not UTF-8"))
+                .and_then(|j| Ok(skin.add_library(&file, &j)?)),
+            Err(e) => Err(e),
+        };
+        match loaded {
+            Ok(more) => queue.extend(more),
+            Err(e) => model
+                .lock()
+                .unwrap()
+                .log(format!("skin {uid}: {file}: {e:#}")),
+        }
+    }
     let files: Vec<String> = skin.image_files().into_iter().collect();
     let total = files.len();
     let progress = |done: usize| {
@@ -103,10 +125,18 @@ async fn fetch_cached(
     file: &str,
     dir: Option<&Path>,
 ) -> anyhow::Result<Vec<u8>> {
-    if file.contains("..") || file.starts_with('/') {
+    // A shared file a skin imports is `../../<folder>/...`, cached under `_shared/`.
+    let local = file.strip_prefix("../../").unwrap_or(file);
+    if local.contains("..") || local.starts_with('/') {
         bail!("{file}: refusing a path outside the skin folder");
     }
-    let cached = dir.map(|d| d.join(file));
+    let cached = dir.map(|d| {
+        if local.len() == file.len() {
+            d.join(file)
+        } else {
+            d.join("_shared").join(local)
+        }
+    });
     let etag_path: Option<PathBuf> = cached.as_ref().map(|p| {
         let mut s = p.as_os_str().to_owned();
         s.push(".etag");
@@ -281,9 +311,16 @@ mod tests {
 
     #[tokio::test]
     async fn refuses_paths_outside_the_skin() {
-        let e = fetch_cached("localhost", 1, "/skin/1", "../x.png", None)
-            .await
-            .unwrap_err();
-        assert!(e.to_string().contains("refusing"));
+        for bad in [
+            "../x.png",
+            "../../../x.png",
+            "../../A/../../x.png",
+            "/etc/x",
+        ] {
+            let e = fetch_cached("localhost", 1, "/skin/1", bad, None)
+                .await
+                .unwrap_err();
+            assert!(e.to_string().contains("refusing"), "{bad}");
+        }
     }
 }
