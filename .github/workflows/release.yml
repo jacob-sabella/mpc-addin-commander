@@ -27,6 +27,6 @@ jobs:
       package_dir: build
       build: ./build.sh
       host_test: sudo sysctl -q vm.mmap_rnd_bits=28 && tests/test.sh
-      about: "The plugins MPC loads, with their own skins, and MPC's transport, on a desktop app over the network."
+      about: "The plugins MPC loads, with their own skins, and MPC's transport, in a desktop app (through an SSH tunnel by default)."
       license: MIT
       dry_run: ${{ inputs.dry_run }}
