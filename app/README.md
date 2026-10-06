@@ -41,6 +41,10 @@ instance whose name contains the text, `--page` a skin tab (0 is the first).
   and the addin's version and device model from `hello`.
 - Left: the instances, with a SYNTH/FX badge and a dot for the skin (yellow loading, green
   ready, red failed). Selecting one subscribes it, so its display texts refresh at `poll_ms`.
+  Akai's own plugins follow, from the project snapshot, each with a yellow READ-ONLY badge.
+- A stock plugin is read-only: a yellow banner above its panel and a READ-ONLY tag on the skin say
+  so, the pointer shows "not allowed" over it, and a click or drag sends nothing. Its values are
+  the last save's; change it on the MPC, then Sync.
 - Centre: the selected instance. With a skin, the page tabs (one per F-key, nested pages as
   `F1.1`) and the page drawn as the device draws it: background and images, filmstrip knobs at
   the value's frame, button groups with the chosen option lit, labels in the skin's font,

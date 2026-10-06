@@ -20,7 +20,8 @@ Two halves:
   current sequence with its loop and the playhead (click a bar to locate there), the project's tracks (colour,
   type, record arm, mute and solo, volume and pan, plugin and preset), an on-screen keyboard (mouse or computer
   keys, any channel) and the MIDI arriving from MPC. Up and Down step through the plugin instances. Akai's own
-  plugins in the project list below them, drawn with their own skins from the values of the last save, read-only:
+  plugins in the project list below them, drawn with their own skins from the values of the last save. They are
+  **read-only** (a READ-ONLY badge, banner and tag; a click or drag sends nothing): change them on the MPC, then
   Sync presses Save on the MPC, you tap Project there, and OK reads the saved project again.
 
 **Status:** the addin passes its offline tests (x86: the hook, poll thread, server, transport and project paths under

@@ -11,12 +11,15 @@ const CARD: egui::Vec2 = egui::Vec2::new(150.0, 128.0);
 const DRAG_PX: f32 = 200.0;
 
 pub fn show(app: &mut App, ui: &mut egui::Ui, inst: &Instance) {
-    ui.label(
-        RichText::new("Generic panel: drag a card vertically to change its value")
-            .color(theme::SUBTEXT)
-            .size(12.0),
-    );
     let id = inst.plugin.id;
+    let read_only = crate::model::is_stock(id);
+    if !read_only {
+        ui.label(
+            RichText::new("Generic panel: drag a card vertically to change its value")
+                .color(theme::SUBTEXT)
+                .size(12.0),
+        );
+    }
     egui::ScrollArea::vertical().show(ui, |ui| {
         ui.horizontal_wrapped(|ui| {
             for p in &inst.plugin.params {
@@ -107,7 +110,11 @@ pub fn show(app: &mut App, ui: &mut egui::Ui, inst: &Instance) {
                     FontId::monospace(10.0),
                     theme::OVERLAY,
                 );
-                if let Some(v) = clicked {
+                if read_only {
+                    if resp.hovered() {
+                        ui.ctx().set_cursor_icon(egui::CursorIcon::NotAllowed);
+                    }
+                } else if let Some(v) = clicked {
                     app.set(id, p.i, v);
                 } else if resp.dragged() {
                     let dy = resp.drag_delta().y;

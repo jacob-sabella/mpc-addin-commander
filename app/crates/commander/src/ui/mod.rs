@@ -363,7 +363,7 @@ impl App {
                 }
                 let selected = self.selected == Some(p.id);
                 let (kind, kind_colour) = match (stock, p.synth) {
-                    (true, _) => ("SAVED", theme::OVERLAY),
+                    (true, _) => ("READ-ONLY", theme::YELLOW),
                     (false, true) => ("SYNTH", theme::BLUE),
                     (false, false) => ("FX", theme::PEACH),
                 };
@@ -371,22 +371,15 @@ impl App {
                     Some(t) => format!("{}\n{}", p.name, t),
                     None => format!("{}\n{}", p.name, p.vendor),
                 };
-                let resp = ui.add_sized(
-                    [ui.available_width(), 40.0],
-                    egui::Button::selectable(selected, text),
-                );
-                let badge = egui::Rect::from_min_size(
-                    egui::pos2(resp.rect.right() - 54.0, resp.rect.top() + 4.0),
-                    egui::vec2(50.0, 16.0),
-                );
-                ui.painter()
-                    .rect_filled(badge, 3.0, kind_colour.gamma_multiply(0.25));
-                ui.painter().text(
-                    badge.center(),
-                    egui::Align2::CENTER_CENTER,
-                    kind,
-                    egui::FontId::proportional(11.0),
-                    kind_colour,
+                // The kind sits at the right of the row, so a long name never runs under it.
+                let badge = RichText::new(format!(" {kind} "))
+                    .size(11.0)
+                    .color(kind_colour)
+                    .background_color(kind_colour.gamma_multiply(0.25));
+                let resp = ui.add(
+                    egui::Button::selectable(selected, text)
+                        .right_text(badge)
+                        .min_size(egui::vec2(ui.available_width(), 40.0)),
                 );
                 if p.skin {
                     let dot = egui::pos2(resp.rect.right() - 8.0, resp.rect.bottom() - 8.0);
@@ -473,9 +466,9 @@ impl App {
             ui.label(RichText::new(&p.name).strong().size(18.0));
             ui.label(RichText::new(&p.vendor).color(theme::SUBTEXT));
             if is_stock(p.id) {
-                let mut what = vec!["values as last saved, read-only".to_string()];
+                let mut what = Vec::new();
                 if let Some(t) = &inst.track {
-                    what.insert(0, t.clone());
+                    what.push(t.clone());
                 }
                 if !p.product.is_empty() {
                     what.push(format!("preset {}", p.product));
@@ -485,6 +478,9 @@ impl App {
                 ui.label(RichText::new(format!("#{} · uid {}", p.id, p.uid)).color(theme::OVERLAY));
             }
         });
+        if is_stock(p.id) {
+            read_only_banner(ui);
+        }
         if is_stock(p.id) && p.params.is_empty() {
             ui.label(
                 RichText::new("This plugin's saved state is in a format the app can't read yet")
@@ -533,6 +529,27 @@ impl App {
             None => generic::show(self, ui, inst),
         }
     }
+}
+
+/// What a stock plugin's panel says above it: the app can show Akai's plugins but not change them.
+pub const READ_ONLY_TEXT: &str = "Akai's own plugin, with its values as of the last save. \
+Change it on the MPC, then press Sync to read it again.";
+
+/// The banner above a stock plugin's panel.
+fn read_only_banner(ui: &mut egui::Ui) {
+    egui::Frame::new()
+        .fill(theme::YELLOW.gamma_multiply(0.15))
+        .stroke(egui::Stroke::new(1.0_f32, theme::YELLOW))
+        .corner_radius(4.0)
+        .inner_margin(egui::Margin::symmetric(10, 6))
+        .show(ui, |ui| {
+            ui.set_width(ui.available_width());
+            ui.horizontal_wrapped(|ui| {
+                ui.label(RichText::new("READ-ONLY").strong().color(theme::YELLOW));
+                ui.label(RichText::new(READ_ONLY_TEXT).color(theme::TEXT));
+            });
+        });
+    ui.add_space(4.0);
 }
 
 /// egui's straight-alpha colour from a skin colour.
@@ -591,6 +608,23 @@ mod tests {
             ..Default::default()
         };
         App::new(Arc::new(Mutex::new(model)), tx, config)
+    }
+
+    #[test]
+    fn a_stock_plugin_sends_no_set() {
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+        let config = Config {
+            connect_on_start: false,
+            ..Default::default()
+        };
+        let mut app = App::new(Arc::new(Mutex::new(Model::new())), tx, config);
+        app.set(crate::model::STOCK_ID, 3, 0.5);
+        assert!(rx.try_recv().is_err(), "a stock plugin is read-only");
+        app.set(2, 3, 0.5);
+        assert!(matches!(
+            rx.try_recv(),
+            Ok(Cmd::Send(ClientMessage::Set { id: 2, i: 3, .. }))
+        ));
     }
 
     #[test]

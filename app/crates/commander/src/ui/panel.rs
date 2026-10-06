@@ -2,7 +2,7 @@
 //! `set` messages.
 
 use super::{colour, fonts, theme, App, Drag};
-use crate::model::{Instance, SkinBundle};
+use crate::model::{is_stock, Instance, SkinBundle};
 use commander_skin::{hit, Action, HAlign, Item, LabelStyle, VAlign};
 use egui::{Align2, Color32, FontId, Pos2, Rect, Sense, Stroke, StrokeKind};
 
@@ -158,6 +158,16 @@ pub fn show(
         }
     }
 
+    // A stock plugin is read-only: a ribbon says so, the pointer shows it, and input goes nowhere.
+    if is_stock(inst.plugin.id) {
+        read_only_ribbon(&painter, rect);
+        if resp.hovered() {
+            ctx.set_cursor_icon(egui::CursorIcon::NotAllowed);
+            resp.on_hover_text(format!("Read-only. {}", super::READ_ONLY_TEXT));
+        }
+        return;
+    }
+
     // Input: a press starts a set or a drag on the topmost control under the pointer.
     let pressed = ui.input(|i| i.pointer.primary_pressed());
     let down = ui.input(|i| i.pointer.primary_down());
@@ -220,6 +230,22 @@ pub fn show(
             }
         }
     }
+}
+
+/// "READ-ONLY" across the panel's top right corner.
+fn read_only_ribbon(painter: &egui::Painter, rect: Rect) {
+    let tag = Rect::from_min_size(
+        rect.right_top() + egui::vec2(-112.0, 8.0),
+        egui::vec2(104.0, 22.0),
+    );
+    painter.rect_filled(tag, 4.0, theme::YELLOW);
+    painter.text(
+        tag.center(),
+        egui::Align2::CENTER_CENTER,
+        "READ-ONLY",
+        egui::FontId::proportional(13.0),
+        theme::CRUST,
+    );
 }
 
 fn placeholder(painter: &egui::Painter, r: Rect) {
