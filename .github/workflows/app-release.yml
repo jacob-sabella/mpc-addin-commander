@@ -24,7 +24,7 @@ jobs:
           cp app/target/release/commander LICENSE "dist/$D/"
           cp app/README.md "dist/$D/README.md"
           tar -C dist -czf "dist/$D.tar.gz" "$D"
-          sha256sum "dist/$D.tar.gz" > "dist/$D.tar.gz.sha256"
+          (cd dist && sha256sum "$D.tar.gz" > "$D.tar.gz.sha256")   # a bare name, so `sha256sum -c` works beside the download
       - uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/v')
         with:
