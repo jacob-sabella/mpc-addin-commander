@@ -4,6 +4,8 @@ Dock an Akai MPC OS standalone device (MPC Live/One/X/Key, Force) to a computer:
 a native desktop app, drawn with their own skins, and follow and drive the device live. MPC's transport (play,
 stop, record, tempo, position) and the project's tracks are there too, and the app plays MIDI into MPC.
 
+![The Commander desktop app with Chordsmith open, connected to an MPC Key 37](docs/img/commander-chordsmith.png)
+
 Two halves:
 
 - **The addin** (`src/`, C, armhf): a small shared library MPC loads at its start through `LD_PRELOAD`, running inside
@@ -63,10 +65,15 @@ the settings: anyone who can reach the port can then change the plugins' paramet
 MPC, write to the control-surface injector file and read the project, and a web page open in a browser on that
 network can send it requests too.
 
-## Run the app
+## Get the desktop app
 
-See `app/README.md`. In short: open the tunnel, `cargo run --release -p commander` from `app/`, enter `localhost`,
-Connect.
+The app has its own releases, separate from the addin's: tag `v<version>`, with
+`mpc-commander-<version>-linux-x86_64.tar.gz` (the `commander` binary, README and licence) and its SHA-256. Unpack it,
+open the tunnel, run `./commander --host localhost`. Addin releases are tagged `commander-addin-v<version>`; an app
+and an addin with the same protocol number (`hello`'s `protocol`, 1 so far) work together whatever their versions.
+
+To build it instead: see `app/README.md`. In short: open the tunnel, `cargo run --release -p commander` from `app/`,
+enter `localhost`, Connect.
 
 ## Protocol and rendering
 
