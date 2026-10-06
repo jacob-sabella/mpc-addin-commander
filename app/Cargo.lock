@@ -368,7 +368,7 @@ dependencies = [
 
 [[package]]
 name = "commander"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "anyhow",
  "commander-protocol",
@@ -391,7 +391,7 @@ dependencies = [
 
 [[package]]
 name = "commander-protocol"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -399,7 +399,7 @@ dependencies = [
 
 [[package]]
 name = "commander-skin"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "serde",
  "serde_json",

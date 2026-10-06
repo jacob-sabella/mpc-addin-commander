@@ -7,7 +7,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.1.0"
+version = "1.0.0"
 edition = "2021"
 # Floor set by the dependency tree: egui 0.34 and wgpu 29 need 1.95.
 rust-version = "1.95"
