@@ -50,6 +50,13 @@ sleep 0.5
 if check_port; then echo "FAIL MPC_COMMANDER_ADDIN_DISABLE ignored"; kill $P; exit 1; fi
 kill $P; wait $P 2>/dev/null || true
 echo "ok   preload: MPC_COMMANDER_ADDIN_DISABLE keeps it off"
+# dlsym(RTLD_NEXT) from a library preloaded ahead of the addin must reach the next preloaded library, not skip to libc
+cc -std=gnu11 -O1 -Wall -Wextra -Werror -fPIC -shared -DSHIM_VAL=1 -o "$B/chain1.so" tests/chain_shim.c -ldl
+cc -std=gnu11 -O1 -Wall -Wextra -Werror -fPIC -shared -DSHIM_VAL=2 -o "$B/chain2.so" tests/chain_shim.c -ldl
+cc -O2 -Wall -o "$B/chain_main" tests/chain_main.c -ldl
+GOT=$(MPC_COMMANDER_ADDIN_DISABLE=1 LD_PRELOAD="$PWD/$B/chain1.so:$PWD/$B/chain2.so:$PWD/$B/mpc_commander_addin.so" "$B/chain_main")
+[ "$GOT" = 21 ] || { echo "FAIL RTLD_NEXT chain through the addin: got $GOT, want 21"; exit 1; }
+echo "ok   preload: dlsym(RTLD_NEXT) from earlier preloaded libraries reaches the next one"
 # the real .so's exported dlsym, binding the fake host's versioned dlsym reference, in a process named MPC
 rm -rf "$B/real"; mkdir -p "$B/real"; cc -O2 -Wall -o "$B/real/MPC" tests/fake_host.c "$PWD/$B/mpc_commander_addin.so" -ldl -lpthread
 cp "$B/fake_plugin.so" "$B/real/"
