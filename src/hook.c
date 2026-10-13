@@ -208,11 +208,17 @@ static NO_SANITIZE struct link_map *map_of(const void *addr)
 
 static NO_SANITIZE void *dlsym_next(const char *name, void *caller)
 {
-    void *sym = real_dlsym(RTLD_NEXT, name);
     struct link_map *cm = map_of(caller);
+    // The objects loaded after the caller, in load order, each asked for the name and kept only when the object
+    // itself defines it: libc's RTLD_NEXT answer is relative to this library, which is usually last among the
+    // preloaded addins, so it would jump over an addin between the caller and here (another shim of the same ALSA call
+    // would never be reached).
+    for (struct link_map *m = cm ? cm->l_next : NULL; m; m = m->l_next) {
+        void *sym = lookup_in(m, name);
+        if (sym && map_of(sym) == m) return sym;
+    }
+    void *sym = real_dlsym(RTLD_NEXT, name);
     if (!sym || !cm || map_of(sym) != cm) return sym;
-    for (struct link_map *m = cm->l_next; m; m = m->l_next)           // the objects loaded after the caller
-        if ((sym = lookup_in(m, name))) return sym;
     struct link_map *me = map_of((const void *)dlsym_next);
     for (struct link_map *m = me ? me->l_next : NULL; m; m = m->l_next)   // the caller came last: anything but it
         if (m != cm && (sym = lookup_in(m, name))) return sym;
