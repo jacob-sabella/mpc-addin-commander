@@ -84,8 +84,10 @@ skin files and how.
 
 ```sh
 tests/test.sh        # the addin's offline tests (x86; needs cc, python3, busybox for the installer test)
-./build.sh           # the armhf .so, in Docker (arm32v7/gcc:11-bullseye, glibc <= 2.31)
-tools/release.sh 0.1.0   # the release zip, checked as the catalog checks it (needs mpc-vst-plugins next to this repo)
+./build.sh           # the armhf .so, in Docker (arm32v7/gcc:11-bullseye, glibc <= 2.31) -- Gen1
+./build-aarch64.sh   # the aarch64 .so, in Docker (arm64v8/gcc:12-bookworm, glibc <= 2.39) -- Gen2
+tools/release.sh 0.1.0            # the armv7 release zip, checked as the catalog checks it (needs mpc-vst-plugins next to this repo)
+tools/release-aarch64.sh 0.1.0    # the aarch64 release zip, same checks -- goes on the same release
 cd app && cargo test && cargo clippy --all-targets -- -D warnings
 ```
 

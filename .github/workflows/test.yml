@@ -1,5 +1,6 @@
 # The offline tests on every push and pull request: the addin's host tests under the sanitizers and the installer in
-# BusyBox, the armhf build under QEMU (which enforces the glibc floor), and the desktop app's fmt, clippy and tests.
+# BusyBox, the armhf build under QEMU (Gen1, which enforces the glibc floor), the aarch64 build under QEMU (Gen2),
+# and the desktop app's fmt, clippy and tests.
 #
 # mpc-vst-plugins is pinned to the same commit as release.yml. Move both pins together.
 name: Test
@@ -24,7 +25,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: sd88me/mpc-vst-plugins
-          ref: a4b8f861d07153a2b387d7520331f532f7247502
+          ref: 1acb45cb9a327cc861d8ea29c95b1cb068f568e2
           path: mpc-vst-plugins
       # TSan can't map its shadow memory with the runner's default 32 bits of mmap randomness
       - run: sudo sysctl -q vm.mmap_rnd_bits=28
@@ -34,12 +35,21 @@ jobs:
   armhf:
     if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
-    name: armhf (MPC OS)
+    name: armhf (MPC OS Gen1)
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-qemu-action@v3
         with: { platforms: arm }
       - run: ./build.sh
+  aarch64:
+    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    name: aarch64 (MPC OS Gen2)
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-qemu-action@v3
+        with: { platforms: arm64 }
+      - run: ./build-aarch64.sh
   app:
     if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-24.04
