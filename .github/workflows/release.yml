@@ -18,12 +18,12 @@ on:
 
 jobs:
   addin:
-    uses: sd88me/mpc-vst-plugins/.github/workflows/addin-release.yml@1acb45cb9a327cc861d8ea29c95b1cb068f568e2
+    uses: sd88me/mpc-vst-plugins/.github/workflows/addin-release.yml@68da25ab50925ec9d3c7fc8e623087ee72338faa
     permissions: { contents: write }
     with:
       tag: commander-addin-v${{ inputs.version }}
       version: ${{ inputs.version }}
-      tools_ref: 1acb45cb9a327cc861d8ea29c95b1cb068f568e2
+      tools_ref: 68da25ab50925ec9d3c7fc8e623087ee72338faa
       package_dir: build
       build: ./build.sh
       package_dir_aarch64: build/aarch64
