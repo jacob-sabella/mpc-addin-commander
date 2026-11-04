@@ -39,7 +39,7 @@ the setting is saved (mpc-vst-plugins `docs/NOTES.md`).
 Download the release zip (`MPC-Commander-addin-<version>-mpc-armv7.zip`), unzip it, and follow its `INSTALL.md`:
 copy the folder to the device over SSH and run `install.sh` there. It needs a modded device with root shell access,
 and it restarts MPC once. `uninstall.sh` reverses it, and deletes the settings file with it. The addin is also in the
-[MPC OS Plugin Catalog](https://sd88me.github.io/mpc-vst-plugins/), so the installer app and `mpc-store.sh` can install
+[MPC OS Plugin Catalog](https://open-mpc.github.io/), so the installer app and `mpc-store.sh` can install
 it. After a firmware update, run the installer again; if the addin ever stops MPC from starting, see "When an addin
 stops MPC from starting" in mpc-vst-plugins' `docs/ADDINS.md`.
 
