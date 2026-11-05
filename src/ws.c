@@ -11,6 +11,7 @@
 #include "project.h"
 #include <dirent.h>
 #include "version.h"
+#include "web_assets.h"
 #include <arpa/inet.h>
 #include <ctype.h>
 #include <errno.h>
@@ -628,6 +629,28 @@ static const char PAGE[] =
     "<h1>MPC Commander addin " ADDIN_VERSION "</h1><p>This is the device side. The desktop app connects to the WebSocket at "
     "<code>/ws</code>; <a href=\"/info\">/info</a>, <a href=\"/plugins\">/plugins</a> and <a href=\"/project\">/project</a> are JSON.</p>";
 
+// The browser UI (web=1): files compiled in by tools/embed_web.py, gzipped, with an ETag from their content. Every
+// browser takes gzip; a client that says it doesn't gets 406 rather than bytes it can't read.
+static void serve_web(int fd, const char *req, const char *name)
+{
+    const struct web_asset *a = NULL;
+    for (size_t k = 0; k < WEB_ASSETS; k++)
+        if (!strcmp(web_assets[k].path, name)) a = &web_assets[k];
+    if (!a) { reply_text(fd, "404 Not Found", "not found"); return; }
+    char extra[160], inm[64], enc[256];
+    snprintf(extra, sizeof extra, "ETag: %s\r\nCache-Control: no-cache\r\nContent-Encoding: gzip\r\nVary: Accept-Encoding\r\n",
+             a->etag);
+    if (header(req, "If-None-Match", inm, sizeof inm) == 0 && !strcmp(inm, a->etag)) {
+        reply_h(fd, "304 Not Modified", a->type, extra, "", 0);
+        return;
+    }
+    if (header(req, "Accept-Encoding", enc, sizeof enc) || !strstr(enc, "gzip")) {
+        reply_text(fd, "406 Not Acceptable", "the browser UI is served gzipped: ask with Accept-Encoding: gzip");
+        return;
+    }
+    reply_h(fd, "200 OK", a->type, extra, a->data, a->len);
+}
+
 static void handle(int fd)
 {
     char req[8192], method[8], target[512];
@@ -644,7 +667,11 @@ static void handle(int fd)
         if (header(req, "Upgrade", up, sizeof up) || strcasecmp(up, "websocket")) reply_text(fd, "426 Upgrade Required", "WebSocket only");
         else session(fd, req);
     } else if (!strcmp(target, "/") || !strcmp(target, "/index.html")) {
-        reply(fd, "200 OK", "text/html; charset=utf-8", PAGE, sizeof PAGE - 1);
+        if (C.web) serve_web(fd, req, "index.html");
+        else reply(fd, "200 OK", "text/html; charset=utf-8", PAGE, sizeof PAGE - 1);
+    } else if (!strncmp(target, "/web/", 5)) {
+        if (C.web) serve_web(fd, req, target + 5);
+        else reply_text(fd, "404 Not Found", "the browser UI is off (web=0)");
     } else if (!strcmp(target, "/info")) {
         serve_info(fd);
     } else if (!strcmp(target, "/plugins")) {

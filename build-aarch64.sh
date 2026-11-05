@@ -6,9 +6,10 @@ set -euo pipefail
 cd "$(dirname "$0")"
 mkdir -p build/aarch64
 VER=$(cat VERSION)
+python3 tools/embed_web.py build/gen/web_assets.h   # the browser UI, compiled in
 docker run --rm --platform linux/arm64 -u "$(id -u):$(id -g)" -v "$PWD":/b -w /b -e VER="$VER" arm64v8/gcc:12-bookworm sh -c '
   set -e
-  F="-std=gnu11 -O2 -Wall -Wextra -Werror -DADDIN_VERSION=\"$VER\""
+  F="-std=gnu11 -O2 -Wall -Wextra -Werror -DADDIN_VERSION=\"$VER\" -Ibuild/gen"
   gcc $F -fPIC -shared -fvisibility=hidden -Wl,-z,defs -Wl,--as-needed -o build/aarch64/mpc_commander_addin.so \
     src/commander.c src/hook.c src/poll.c src/ws.c src/conf.c src/json.c src/daw.c src/project.c src/midi.c -ldl -lpthread
   strip --strip-unneeded build/aarch64/mpc_commander_addin.so

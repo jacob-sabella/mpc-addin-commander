@@ -11,6 +11,7 @@ struct conf {
     int poll_ms;       // how often every instance's values are read
     int text_ms;       // how often every instance's display text is re-read (changed values re-read at poll_ms)
     int skins;         // skins=0 turns the /skin/ file routes off
+    int web;           // web=0 turns the browser UI off: / is the short addin page again, /web/ is not served
     int midi;          // midi=0 opens no sequencer port: no transport, no MIDI in or out
     int transport;     // what a transport command sends: TRANSPORT_MMC, TRANSPORT_REALTIME or both (bits)
     char surface[256]; // a file the device's own control-surface injector reads (raw MIDI bytes appended); "" = off

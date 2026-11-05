@@ -288,6 +288,23 @@ ws.send({"t": "list"})
 assert ws.wait(lambda m: m["t"] == "plugins")["plugins"][0]["skin"]
 print("ok   /skin serves the plugin's skin files, with ETag; escapes refused")
 
+# the browser UI (web=1, the default): / and /web/<file>, gzipped, with an ETag from the content
+import gzip
+GZ = {"Accept-Encoding": "gzip, deflate"}
+st, body, h = get("/", GZ)
+assert st == 200 and h["Content-Encoding"] == "gzip" and h["Content-Type"].startswith("text/html") and h.get("ETag"), (st, h)
+assert b"/web/app.js" in gzip.decompress(body)
+st2, _, _ = get("/", dict(GZ, **{"If-None-Match": h["ETag"]}))
+assert st2 == 304, st2
+for f, t in (("app.js", "text/javascript"), ("skin.js", "text/javascript"), ("style.css", "text/css"),
+             ("fonts/TitilliumWeb-SemiBold.ttf", "font/ttf"), ("fonts/OFL.txt", "text/plain")):
+    st, body, h = get("/web/" + f, GZ)
+    assert st == 200 and h["Content-Type"].startswith(t) and gzip.decompress(body), (f, st, h)
+assert gzip.decompress(get("/web/app.js", GZ)[1]) == open(os.path.join(os.path.dirname(__file__), "..", "web", "app.js"), "rb").read()
+assert get("/web/nope.js", GZ)[0] == 404 and get("/web/../info", GZ)[0] == 404
+assert get("/web/app.js", {"Accept-Encoding": "identity"})[0] == 406
+print("ok   the browser UI: /, /web/ files gzipped with ETag, 304, 404, 406 without gzip")
+
 # ---- the DAW side ----
 def midi_out():
     """What the addin sent on its port, as messages."""
@@ -436,6 +453,7 @@ open(XPJ, "wb").write(b"not gzip at all")
 st, body, _ = get("/project")
 assert st == 404 and b"project file" in body, (st, body)   # zlib reads a plain file as is: no header
 print("ok   the project snapshot: tempo, sequence, tracks and plugins; a broken file is an error")
+
 
 if os.environ.get("STOCK_TEST"):   # Akai's own skins, read where they are installed (here the test root)
     F = "/stock/Test%20Vendor%20-%20MPC%20-%20Fake%20Verb/"

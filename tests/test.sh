@@ -8,9 +8,11 @@ cd "$(dirname "$0")/.."
 B=build/host
 mkdir -p "$B"
 SRC="src/commander.c src/hook.c src/poll.c src/ws.c src/conf.c src/json.c src/daw.c src/project.c"
-VER="-DADDIN_VERSION=\"$(cat VERSION)\""
+python3 tools/embed_web.py build/gen/web_assets.h
+VER="-DADDIN_VERSION=\"$(cat VERSION)\" -Ibuild/gen"
 W="-std=gnu11 -O1 -g -Wall -Wextra -Werror -fno-omit-frame-pointer $VER"
 
+node tests/test_web.mjs | sed "s/^/web: /"; [ "${PIPESTATUS[0]}" = 0 ] || { echo "FAIL web/skin.js"; exit 1; }
 cc -std=gnu11 -O1 -g -Wall -Wextra -Werror -fPIC -shared -o "$B/fake_plugin.so" tests/fake_plugin.c -ldl
 for san in address,undefined thread; do
   name=${san%%,*}
@@ -45,6 +47,24 @@ for _ in $(seq 50); do check_port && break; sleep 0.1; done
 INFO=$(python3 -c "import urllib.request; print(urllib.request.urlopen('http://127.0.0.1:$PORT/info').read().decode())")
 kill $P; wait $P 2>/dev/null || true
 case "$INFO" in *"\"version\":\"$(cat VERSION)\""*) echo "ok   preload: serves inside MPC: $INFO" ;; *) echo "FAIL preload: $INFO"; cat "$B/smoke.log"; exit 1 ;; esac
+# web=0: / is the short page again and /web/ is not served; the rest stays
+printf 'port=%s\nbind=127.0.0.1\nweb=0\n' "$PORT" > "$B/noweb.conf"
+MPC_COMMANDER_ADDIN_CONF="$B/noweb.conf" LD_PRELOAD="$PWD/$B/mpc_commander_addin.so" "$B/MPC" 2>"$B/noweb.log" & P=$!
+for _ in $(seq 50); do check_port && break; sleep 0.1; done
+NOWEB=$(python3 - "$PORT" <<'PY'
+import sys, urllib.request, urllib.error
+base = "http://127.0.0.1:%s" % sys.argv[1]
+page = urllib.request.urlopen(urllib.request.Request(base + "/", headers={"Accept-Encoding": "gzip"}))
+try:
+    urllib.request.urlopen(urllib.request.Request(base + "/web/app.js", headers={"Accept-Encoding": "gzip"})); web = 200
+except urllib.error.HTTPError as e:
+    web = e.code
+print("page" if page.headers.get("Content-Encoding") is None and b"Commander addin" in page.read() else "ui", web)
+PY
+)
+kill $P; wait $P 2>/dev/null || true
+[ "$NOWEB" = "page 404" ] || { echo "FAIL web=0: $NOWEB"; cat "$B/noweb.log"; exit 1; }
+echo "ok   preload: web=0 serves the short page and no browser UI"
 # the MPC Sample's binary is "MPC Sample", and its settings path has spaces in it: settings= takes the whole value
 cp "$B/MPC" "$B/MPC Sample"
 printf 'port=%s\nbind=127.0.0.1\nsettings = /data/Settings/Akai/MPC Sample/MPC Sample.settings  \n' "$PORT" > "$B/sample.conf"

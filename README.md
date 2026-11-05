@@ -65,6 +65,17 @@ the settings: anyone who can reach the port can then change the plugins' paramet
 MPC, write to the control-surface injector file and read the project, and a web page open in a browser on that
 network can send it requests too.
 
+## Browser UI
+
+With the tunnel open, `http://localhost:6730/` is a control panel in any browser: transport buttons, the plugin list,
+each plugin's own MPC skin drawn on a canvas (pages as tabs; knobs and sliders drag, buttons click), generic parameter
+cards for plugins without a skin, and the project snapshot. It uses the same WebSocket and skin routes as the app and
+works on a phone (`#<id>/<page>` in the URL links to a plugin page). The files are compiled into the addin: nothing to
+install beside it. It is on by default; set `web=0` in `mpc_commander_addin.conf` to turn it off (`/` then shows the
+short page and `/web/*` is 404; the WebSocket, `/info`, `/plugins`, `/project` and skin routes stay). Like the rest
+of the addin it has no login, so keep `bind=127.0.0.1` unless the network is yours.
+
+
 ## Get the desktop app
 
 The app has its own releases, separate from the addin's: tag `v<version>`, with
@@ -88,6 +99,7 @@ tests/test.sh        # the addin's offline tests (x86; needs cc, python3, busybo
 ./build-aarch64.sh   # the aarch64 .so, in Docker (arm64v8/gcc:12-bookworm, glibc <= 2.39) -- Gen2
 tools/release.sh 0.1.0            # the armv7 release zip, checked as the catalog checks it (needs mpc-vst-plugins next to this repo)
 tools/release-aarch64.sh 0.1.0    # the aarch64 release zip, same checks -- goes on the same release
+tools/embed_web.py build/gen/web_assets.h   # the builds and tests.sh do this; web/ is plain files, tests/test_web.mjs (Node) checks the skin renderer
 cd app && cargo test && cargo clippy --all-targets -- -D warnings
 ```
 
@@ -96,5 +108,5 @@ by the `Release` workflow (the addin, tag `commander-addin-v<version>`) and `App
 
 ## License
 
-MIT. The app bundles Titillium Web (SIL Open Font License) and, where found, Roboto (Apache 2.0): see
+MIT. The browser UI and the app bundle Titillium Web (SIL Open Font License) and, where found, Roboto (Apache 2.0): see
 `app/crates/commander/assets/fonts/`.

@@ -98,7 +98,8 @@ control surface (`surface` with note 0x2A), the user picks Project on the MPC, a
 | `GET /project` | the `project` message as a document |
 | `GET /skin/<id>/<path>` | a file from that plugin's `Plugin Skins/` folder (found as for `skin` above), read-only; `..` and symlinks out of the folder are refused; `ETag` is the file's size and mtime, `If-None-Match` gives 304 |
 | `GET /stock/<folder>/<path>` | a file from a stock plugin's `Plugin Skins/` folder, read-only. `<folder>` is `<vendor> - MPC - <name>` (URL-escaped), looked up in `/usr/share/Akai/Content/Synths`, `/storage/Synths`, `/sdcard/Synths`, `/media/az01-internal/Synths` and `/media/*/Synths`, the first with a `TUI.json`; a file the skin names but doesn't hold comes from `AIR Components` or `AKAI Components` beside it or in `/usr/share/Akai/Content/Synths`, as MPC finds it; a `<path>` of `../../<D>/<file>` is a definition file the skin imports, with `D` one of those shared folders, `Generic`, or another stock plugin's folder (then only under its `Plugin Skins/`); the same confinement and `ETag` as `/skin`. Akai's files stay on the device: the app caches them locally and never ships them |
-| `GET /` | a short page naming the addin and its version |
+| `GET /` | the browser UI (`web/index.html`), or with `web=0` a short page naming the addin and its version |
+| `GET /web/<file>` | the browser UI's files (HTML, JS, CSS, the app's fonts), compiled into the addin and always sent gzipped with `Content-Encoding: gzip`, `Cache-Control: no-cache` and a content-hash `ETag` (304 on `If-None-Match`); a client that doesn't accept gzip gets 406; unknown names are 404, and with `web=0` every name is 404 |
 
 Every HTTP reply but the WebSocket is `Connection: close`.
 
