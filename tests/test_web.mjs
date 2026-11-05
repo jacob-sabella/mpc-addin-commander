@@ -5,7 +5,7 @@ import { readFileSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import assert from 'node:assert/strict';
-import { Skin, hit, press, parseColour, resolvePath, fontFor, PAGE_WIDTH, PAGE_HEIGHT } from '../web/skin.js';
+import { Skin, hit, press, parseColour, resolvePath, fontFor, stripFrame, PAGE_WIDTH, PAGE_HEIGHT } from '../web/skin.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const FIX = join(here, '..', 'app', 'crates', 'commander-skin', 'tests', 'fixtures', 'chordsmith');
@@ -22,6 +22,18 @@ let failed = 0;
 const test = (name, f) => {
   try { f(); console.log(`ok   ${name}`); } catch (e) { failed++; console.log(`FAIL ${name}\n${e.stack}`); }
 };
+
+test('filmstrip frames crop as the desktop app does', () => {
+  // a knob strip: 128 square frames of 66, numFrames 127; frame 45 starts at 45 * 66, not 45 * 8448 / 127
+  assert.deepEqual(stripFrame(66, 8448, 45, 127), { y: 2970, h: 66 });
+  assert.deepEqual(stripFrame(66, 8448, 126, 127), { y: 8316, h: 66 });
+  // stock non-square frames: image height / numFrames
+  assert.deepEqual(stripFrame(250, 6969, 100, 101), { y: 6900, h: 69 });
+  assert.deepEqual(stripFrame(76, 258, 2, 3), { y: 172, h: 86 });
+  // square frames, exactly numFrames of them; out-of-range frames clamp
+  assert.deepEqual(stripFrame(40, 400, 99, 10), { y: 360, h: 40 });
+  assert.deepEqual(stripFrame(40, 400, -3, 10), { y: 0, h: 40 });
+});
 
 test('pages are the F-keys', () => {
   const s = skin();

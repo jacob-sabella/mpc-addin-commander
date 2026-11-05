@@ -58,6 +58,16 @@ function parseCondition(h) {
 }
 const holds = (c, params) => optionIndex(params.value(c.param), c.count) === c.index;
 
+// Where frame `frame` of a `frames`-frame vertical filmstrip `w` x `h` sits: {y, h}, whole pixels, as the desktop app
+// crops it (app/crates/commander/src/ui/mod.rs). Square frames when there are `frames` of them, else h / frames rounded
+// down: a knob strip holds 128 square frames with numFrames 127, and a fractional height drifts half a pixel a frame.
+export function stripFrame(w, h, frame, frames) {
+  frames = Math.max(1, frames | 0);
+  const fh = w * frames === h ? w : Math.max(1, Math.floor(h / frames));
+  const y = Math.min(Math.min(Math.max(0, frame | 0), frames - 1) * fh, h - 1);
+  return { y, h: Math.min(y + fh, h) - y };
+}
+
 // rel relative to the folder of base, both relative to the skin folder: ("../../A/x.json", "../B/y.json") gives
 // "../../B/y.json". null for an absolute path.
 export function resolvePath(base, rel) {

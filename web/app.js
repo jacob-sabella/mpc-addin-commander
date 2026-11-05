@@ -1,7 +1,7 @@
 // The browser UI: the same WebSocket and skin files the desktop app uses (docs/PROTOCOL.md, docs/SKIN.md), served by
 // the addin itself. Lists MPC's plugin instances, draws the selected one's skin page on a canvas (skin.js lays it out)
 // or a card per parameter, sends set messages for clicks and drags, and shows the transport and the project snapshot.
-import { Skin, hit, press, css, fontFor } from './skin.js';
+import { Skin, hit, press, css, fontFor, stripFrame } from './skin.js';
 
 const $ = id => document.getElementById(id);
 const DRAG_PX = 200;          // generic card: screen pixels of drag per unit of value
@@ -384,10 +384,10 @@ function drawItem(it, sk, inst) {
     case 'knob': {
       const img = sk.images.get(it.file);
       if (!img) { placeholder(r); break; }
-      const fw = img.width, fh = img.height / Math.max(1, it.frames);
+      const fw = img.width, f = stripFrame(img.width, img.height, it.frame, it.frames);
       // A frame smaller than its rect draws at its own size from the rect's top left (AIR's slider track).
-      const d = fw < r.w && fh < r.h ? { x: r.x, y: r.y, w: fw, h: fh } : r;
-      ctx.drawImage(img, 0, it.frame * fh, fw, fh, d.x, d.y, d.w, d.h);
+      const d = fw < r.w && f.h < r.h ? { x: r.x, y: r.y, w: fw, h: f.h } : r;
+      ctx.drawImage(img, 0, f.y, fw, f.h, d.x, d.y, d.w, d.h);
       break;
     }
     case 'slider': {
