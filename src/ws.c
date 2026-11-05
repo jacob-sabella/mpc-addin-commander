@@ -326,6 +326,7 @@ static void hello_json(struct sb *b)
     FILE *f = fopen("/proc/device-tree/model", "re");
     if (f) { size_t n = fread(model, 1, sizeof model - 1, f); model[n] = 0; fclose(f); }
     f = fopen("/tmp/com.akaipro.mpc.version", "re");
+    if (!f) f = fopen("/tmp/com.akai.mpcsample.version", "re");   // the MPC Sample's (1.3.0.12 on 2026-11-04)
     if (f) { if (!fgets(mpc, sizeof mpc, f)) mpc[0] = 0; fclose(f); }
     model[strcspn(model, "\n")] = mpc[strcspn(mpc, "\r\n")] = 0;
     sb_printf(b, "{\"t\":\"hello\",\"protocol\":%d,\"addin\":\"%s\",\"device\":{\"model\":", COMMANDER_PROTOCOL, ADDIN_VERSION);

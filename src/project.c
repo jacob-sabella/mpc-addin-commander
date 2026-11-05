@@ -63,7 +63,11 @@ static void xml_unescape(char *s)
 // recentProject1 from MPC's settings. 0 when found.
 static int recent_project(char *out, size_t n)
 {
-    FILE *f = fopen(C.settings, "re");
+    // settings= first; when that file isn't there, where each kind of device keeps it: Gen1 and Force, Gen2, the MPC Sample
+    static const char *const known[] = { "/media/az01-internal/Settings/MPC/MPC.settings", "/data/Settings/MPC/MPC.settings",
+                                         "/data/Settings/Akai/MPC Sample/MPC Sample.settings" };
+    FILE *f = C.settings[0] ? fopen(C.settings, "re") : NULL;
+    for (size_t i = 0; !f && i < sizeof known / sizeof *known; i++) f = fopen(known[i], "re");
     if (!f) return -1;
     char line[1024];
     int found = -1;
@@ -273,12 +277,30 @@ static void sequence_json(struct sb *b, const char *s, const struct jtok *t, int
               first >= 0 ? num_or(s, t, first, "beatLength", 960) : 960);
 }
 
+// The MPC Sample keeps no recent-project list in its settings. Its open project lives in a working copy that MPC saves as
+// it goes, with the project's own name on the first line of original_project_data.txt beside it (the second line is
+// where the user last saved it). 0 when found; title gets the name, or stays empty.
+#define SAMPLE_TEMP "/data/TempProjects"
+static int sample_project(char *out, size_t n, char *title, size_t tn)
+{
+    struct stat st;
+    if (stat(SAMPLE_TEMP "/Temp-Project.xpj", &st) != 0) return -1;
+    snprintf(out, n, "%s", SAMPLE_TEMP "/Temp-Project.xpj");
+    FILE *f = fopen(SAMPLE_TEMP "/original_project_data.txt", "re");
+    if (f) {
+        if (fgets(title, (int)tn, f)) title[strcspn(title, "\r\n")] = 0;
+        fclose(f);
+    }
+    return 0;
+}
+
 int project_json(struct sb *b)
 {
-    char path[512];
+    char path[512], title[256] = "";
     const char *err = NULL;
     if (C.project[0]) snprintf(path, sizeof path, "%s", C.project);
-    else if (recent_project(path, sizeof path)) err = "no recent project in MPC's settings";
+    else if (recent_project(path, sizeof path) && sample_project(path, sizeof path, title, sizeof title))
+        err = "no recent project in MPC's settings";
     size_t len = 0;
     char *s = err ? NULL : read_project(path, &len, &err);
     int count = 0;
@@ -298,7 +320,7 @@ int project_json(struct sb *b)
     long long mtime = stat(path, &st) == 0 ? (long long)st.st_mtime : 0;
     const char *base = strrchr(path, '/');
     char name[512];
-    snprintf(name, sizeof name, "%s", base ? base + 1 : path);
+    snprintf(name, sizeof name, "%s", title[0] ? title : base ? base + 1 : path);
     char *dot = strrchr(name, '.');
     if (dot && !strcmp(dot, ".xpj")) *dot = 0;
 

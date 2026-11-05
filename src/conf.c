@@ -45,7 +45,18 @@ int conf_line(struct conf *c, const char *line)
     char k[32], v[256];
     while (isspace((unsigned char)*line)) line++;
     if (!*line || *line == '#') return 0;
-    if (sscanf(line, " %31[a-z_] = %255s", k, v) != 2) return -1;
+    // the value is the rest of the line, trailing blanks dropped: a path may hold spaces (the MPC Sample's settings do)
+    int kn = 0;
+    if (sscanf(line, "%31[a-z_]%n", k, &kn) != 1) return -1;
+    const char *p = line + kn;
+    while (*p == ' ' || *p == '\t') p++;
+    if (*p++ != '=') return -1;
+    while (*p == ' ' || *p == '\t') p++;
+    size_t vn = strlen(p);
+    while (vn && isspace((unsigned char)p[vn - 1])) vn--;
+    if (!vn || vn >= sizeof v) return -1;
+    memcpy(v, p, vn);
+    v[vn] = 0;
     if (!strcmp(k, "enabled")) return to_int(v, 0, 1, &c->enabled);
     if (!strcmp(k, "port")) return to_int(v, 1, 65535, &c->port);
     if (!strcmp(k, "max_clients")) return to_int(v, 1, 32, &c->max_clients);

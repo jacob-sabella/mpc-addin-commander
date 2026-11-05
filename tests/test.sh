@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Offline tests on the build machine (x86): the hook, the poll thread and the server, end to end through a fake host
 # and a fake plugin, under ASan+UBSan and under TSan; a preload smoke test of the real .so (it starts in a process
-# named MPC and stays out of every other one, and MPC_COMMANDER_ADDIN_DISABLE keeps it off); the exports; and the
+# named MPC or MPC Sample and stays out of every other one, and MPC_COMMANDER_ADDIN_DISABLE keeps it off); the exports; and the
 # installer against a scratch systemd layout (BUSYBOX=/path/to/busybox runs it in the device's shell).
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -45,6 +45,16 @@ for _ in $(seq 50); do check_port && break; sleep 0.1; done
 INFO=$(python3 -c "import urllib.request; print(urllib.request.urlopen('http://127.0.0.1:$PORT/info').read().decode())")
 kill $P; wait $P 2>/dev/null || true
 case "$INFO" in *"\"version\":\"$(cat VERSION)\""*) echo "ok   preload: serves inside MPC: $INFO" ;; *) echo "FAIL preload: $INFO"; cat "$B/smoke.log"; exit 1 ;; esac
+# the MPC Sample's binary is "MPC Sample", and its settings path has spaces in it: settings= takes the whole value
+cp "$B/MPC" "$B/MPC Sample"
+printf 'port=%s\nbind=127.0.0.1\nsettings = /data/Settings/Akai/MPC Sample/MPC Sample.settings  \n' "$PORT" > "$B/sample.conf"
+MPC_COMMANDER_ADDIN_CONF="$B/sample.conf" LD_PRELOAD="$PWD/$B/mpc_commander_addin.so" "$B/MPC Sample" 2>"$B/sample.log" & P=$!
+for _ in $(seq 50); do check_port && break; sleep 0.1; done
+if check_port; then ok=1; else ok=0; fi
+kill $P; wait $P 2>/dev/null || true
+[ $ok = 1 ] || { echo "FAIL preload: not started in a process named MPC Sample"; cat "$B/sample.log"; exit 1; }
+if grep -q "not understood" "$B/sample.log"; then echo "FAIL a settings path with spaces was refused"; cat "$B/sample.log"; exit 1; fi
+echo "ok   preload: starts in MPC Sample, and a settings path with spaces is taken"
 MPC_COMMANDER_ADDIN_DISABLE=1 MPC_COMMANDER_ADDIN_CONF="$B/smoke.conf" LD_PRELOAD="$PWD/$B/mpc_commander_addin.so" "$B/MPC" & P=$!
 sleep 0.5
 if check_port; then echo "FAIL MPC_COMMANDER_ADDIN_DISABLE ignored"; kill $P; exit 1; fi
