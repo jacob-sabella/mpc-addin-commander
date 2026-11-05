@@ -75,6 +75,14 @@ install beside it. It is on by default; set `web=0` in `mpc_commander_addin.conf
 short page and `/web/*` is 404; the WebSocket, `/info`, `/plugins`, `/project` and skin routes stay). Like the rest
 of the addin it has no login, so keep `bind=127.0.0.1` unless the network is yours.
 
+### Rack (MPC Sample)
+
+On an MPC Sample with the `mpc-addin-sample-rack` addin installed, the browser UI gets a **Rack** button: the plugins on the input, outputs,
+submixes and tracks, with add, remove and ON/OFF. Changes queue and go out together on **Apply**, which asks twice, because the Sample has no
+way to load a plugin into a running project: the rack addin stops MPC, edits the project's inserts and starts MPC again (save first). One of
+each plugin per project, four inserts per channel, and MPC's own effects are shown but left alone. `rack=0` in the settings turns this off.
+It uses the rack addin's exports inside MPC's process, not a socket, so it only works in that process; anyone who can reach the port (see
+`bind`) can restart MPC this way, which is one more reason to leave `bind=127.0.0.1`.
 
 ## Get the desktop app
 

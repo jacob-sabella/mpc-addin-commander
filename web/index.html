@@ -25,7 +25,8 @@
     <button data-cmd="continue" title="Continue">&#10148;&#xFE0E;</button>
   </div>
   <div class="readout"><b id="pos">1.1.000</b><span id="tempo">--- bpm</span><span id="tstate">stopped</span></div>
-  <button class="chip" id="project-btn" title="Read the project file">Project</button>
+  <button class="chip" id="rack-btn" title="Add, remove or turn off the plugins in the project" hidden>Rack</button>
+  <button class="chip next" id="project-btn" title="Read the project file">Project</button>
 </div>
 
 <div class="main">
@@ -45,6 +46,10 @@
     <div class="tip" id="tip"></div>
     <div class="turn">Turn the phone sideways for a bigger panel.</div>
   </section>
+  <aside class="project rack" id="rack" hidden>
+    <div class="side-head">Rack <button class="icon small" id="rack-close" aria-label="Close">&times;</button></div>
+    <div id="rack-body"></div>
+  </aside>
   <aside class="project" id="project" hidden>
     <div class="side-head">Project <button class="icon small" id="project-close" aria-label="Close">&times;</button></div>
     <div id="project-body"></div>

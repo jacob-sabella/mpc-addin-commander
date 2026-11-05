@@ -17,6 +17,7 @@ void conf_defaults(struct conf *c)
     c->text_ms = 1000;
     c->skins = 1;
     c->web = 1;
+    c->rack = 1;
     c->midi = 1;
     c->transport = TRANSPORT_MMC | TRANSPORT_REALTIME;
     snprintf(c->surface, sizeof c->surface, "/data/midi.in");
@@ -66,6 +67,7 @@ int conf_line(struct conf *c, const char *line)
     if (!strcmp(k, "text_ms")) return to_int(v, 100, 60000, &c->text_ms);
     if (!strcmp(k, "skins")) return to_int(v, 0, 1, &c->skins);
     if (!strcmp(k, "web")) return to_int(v, 0, 1, &c->web);
+    if (!strcmp(k, "rack")) return to_int(v, 0, 1, &c->rack);
     if (!strcmp(k, "midi")) return to_int(v, 0, 1, &c->midi);
     if (!strcmp(k, "transport")) {
         if (!strcmp(v, "mmc")) c->transport = TRANSPORT_MMC;

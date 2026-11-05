@@ -11,7 +11,7 @@ docker run --rm --platform linux/arm64 -u "$(id -u):$(id -g)" -v "$PWD":/b -w /b
   set -e
   F="-std=gnu11 -O2 -Wall -Wextra -Werror -DADDIN_VERSION=\"$VER\" -Ibuild/gen"
   gcc $F -fPIC -shared -fvisibility=hidden -Wl,-z,defs -Wl,--as-needed -o build/aarch64/mpc_commander_addin.so \
-    src/commander.c src/hook.c src/poll.c src/ws.c src/conf.c src/json.c src/daw.c src/project.c src/midi.c -ldl -lpthread
+    src/commander.c src/hook.c src/poll.c src/ws.c src/conf.c src/json.c src/daw.c src/project.c src/rack.c src/midi.c -ldl -lpthread
   strip --strip-unneeded build/aarch64/mpc_commander_addin.so
   max=$(objdump -T build/aarch64/mpc_commander_addin.so | grep -o "GLIBC_[0-9.]*" | sort -t. -k2 -n -u | tail -n 1)
   echo "highest glibc symbol version: $max"

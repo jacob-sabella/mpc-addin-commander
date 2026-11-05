@@ -52,6 +52,8 @@ function onMessage(m) {
         b.title = midiOff ? `No MIDI port: ${(m.midi && m.midi.error) || 'off'}` : b.dataset.cmd[0].toUpperCase() + b.dataset.cmd.slice(1);
       }
       $('transport').hidden = false;
+      S.rackApplying = false;
+      send({ t: 'rack' });
       break;
     }
     case 'plugins':
@@ -87,6 +89,8 @@ function onMessage(m) {
     }
     case 'transport': S.transport = m; renderTransport(); break;
     case 'project': renderProject(m); break;
+    case 'rack': S.rack = m; $('rack-btn').hidden = !m.available; renderRack(); break;
+    case 'rack_result': rackResult(m); break;
     case 'pong': S.rtt = Math.round(performance.now() - S.pingAt); conn('up'); break;
     case 'error': tip(`The addin says: ${m.msg}`, 5000); if ($('project-body').dataset.wait) renderProjectError(m.msg); break;
   }
@@ -674,6 +678,123 @@ function renderProject(m) {
   note.className = 'note';
   note.textContent = 'From the project file as MPC last saved it, not the live state.';
   body.append(note);
+}
+
+// ---- the MPC Sample rack: add / remove / turn off plugins (the rack addin edits the project and restarts MPC) ----
+// Edits queue here, shown as pending, and go out together on Apply (two clicks: it restarts MPC).
+S.rack = null; S.edits = []; S.rackMsg = ''; S.rackApplying = false; S.rackConfirm = 0;
+$('rack-btn').onclick = () => {
+  $('project').hidden = true;
+  $('rack').hidden = false;
+  send({ t: 'rack' });
+  renderRack();
+};
+$('rack-close').onclick = () => { $('rack').hidden = true; };
+$('project-btn').addEventListener('click', () => { $('rack').hidden = true; });
+
+const findEdit = (op, slot, index, name) => S.edits.findIndex(e => e.op === op && e.slot === slot && (op === 'add' ? e.plugin === name : e.index === index && e.name === name));
+const usedNames = () => {
+  const used = new Set();
+  for (const s of S.rack.slots) for (const f of s.fx) if (f.vst && findEdit('remove', s.id, f.index, f.name) < 0) used.add(f.name);
+  for (const e of S.edits) if (e.op === 'add') used.add(e.plugin);
+  return used;
+};
+const slotCount = s => s.fx.filter(f => findEdit('remove', s.id, f.index, f.name) < 0).length +
+                       S.edits.filter(e => e.op === 'add' && e.slot === s.id).length;
+function toggleEdit(op, slot, f, value) {
+  const i = findEdit(op, slot, f.index, f.name);
+  if (i >= 0) S.edits.splice(i, 1);
+  else {
+    if (op === 'remove') { const j = findEdit('enable', slot, f.index, f.name); if (j >= 0) S.edits.splice(j, 1); }
+    S.edits.push({ op, slot, index: f.index, name: f.name, value });
+  }
+  S.rackConfirm = 0; S.rackMsg = '';
+  renderRack();
+}
+function renderRack() {
+  const body = $('rack-body');
+  body.textContent = '';
+  const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; };
+  const r = S.rack;
+  if (!r || !r.available) { body.append(el('p', 'note', r ? `No rack here: ${r.reason}.` : 'Reading the rack…')); return; }
+  if (!r.ok) { body.append(el('p', 'note', `The project can't be read: ${r.error}`)); return; }
+  if (S.rackApplying || r.applying) { body.append(el('p', 'rack-msg', 'MPC is restarting with your changes. This page reconnects by itself.')); return; }
+  body.append(el('p', 'note', `Project: ${r.project || '(untitled)'}. MPC's own effects stay as they are; one of each plugin per project.`));
+  const used = usedNames();
+  for (const s of r.slots) {
+    const box = el('div', 'rack-slot');
+    box.append(el('h3', '', s.label));
+    for (const f of s.fx) {
+      const gone = findEdit('remove', s.id, f.index, f.name) >= 0;
+      const en = findEdit('enable', s.id, f.index, f.name);
+      const on = en >= 0 ? S.edits[en].value : f.enabled;
+      const row = el('div', 'rack-fx' + (f.vst ? '' : ' own') + (gone ? ' gone' : ''));
+      row.append(el('span', 'nm', f.name));
+      if (!f.vst) row.append(el('span', 'tag', 'MPC'));
+      else {
+        if (en >= 0 && !gone) row.append(el('span', 'tag', 'pending'));
+        const t = el('button', on ? 'on' : '', on ? 'ON' : 'OFF');
+        t.disabled = gone;
+        t.title = 'Turn this plugin on or off (applied with the rest)';
+        t.onclick = () => toggleEdit('enable', s.id, f, !on);
+        const x = el('button', '', gone ? 'undo' : 'remove');
+        x.onclick = () => toggleEdit('remove', s.id, f);
+        row.append(t, x);
+      }
+      box.append(row);
+    }
+    for (const e of S.edits.filter(e => e.op === 'add' && e.slot === s.id)) {
+      const row = el('div', 'rack-fx new');
+      row.append(el('span', 'nm', e.plugin), el('span', 'tag', 'new'));
+      const x = el('button', '', 'undo');
+      x.onclick = () => { S.edits.splice(S.edits.indexOf(e), 1); S.rackConfirm = 0; renderRack(); };
+      row.append(x);
+      box.append(row);
+    }
+    const free = r.plugins.filter(p => !used.has(p.name));
+    if (slotCount(s) < r.max_inserts && free.length) {
+      const add = el('div', 'rack-add');
+      const sel = el('select');
+      for (const p of free) { const o = el('option', '', p.name); o.value = p.name; sel.append(o); }
+      const b = el('button', '', 'add');
+      b.onclick = () => { S.edits.push({ op: 'add', slot: s.id, plugin: sel.value }); S.rackConfirm = 0; S.rackMsg = ''; renderRack(); };
+      add.append(sel, b);
+      box.append(add);
+    }
+    body.append(box);
+  }
+  const bar = el('div', 'rack-bar');
+  const go = el('button', S.rackConfirm ? 'go' : '', S.rackConfirm ? 'Restart MPC and apply' : `Apply ${S.edits.length} change${S.edits.length === 1 ? '' : 's'}`);
+  go.disabled = !S.edits.length;
+  go.onclick = () => {
+    if (!S.rackConfirm) {
+      S.rackConfirm = Date.now();
+      setTimeout(() => { if (S.rackConfirm && Date.now() - S.rackConfirm >= 5900) { S.rackConfirm = 0; renderRack(); } }, 6000);
+      renderRack();
+      return;
+    }
+    S.rackConfirm = 0;
+    S.rackMsg = 'Sending…';
+    const edits = S.edits.map(e => e.op === 'add' ? { op: 'add', slot: e.slot, plugin: e.plugin }
+      : e.op === 'remove' ? { op: 'remove', slot: e.slot, index: e.index, name: e.name }
+      : { op: 'enable', slot: e.slot, index: e.index, name: e.name, value: e.value });
+    send({ t: 'rack_apply', edits });
+    renderRack();
+  };
+  bar.append(go);
+  if (S.edits.length) {
+    const d = el('button', '', 'Discard');
+    d.style.marginTop = '4px';
+    d.onclick = () => { S.edits = []; S.rackConfirm = 0; S.rackMsg = ''; renderRack(); };
+    bar.append(d);
+  }
+  if (S.rackMsg) bar.append(el('p', 'rack-msg', S.rackMsg));
+  body.append(bar);
+}
+function rackResult(m) {
+  if (m.ok) { S.rackApplying = true; S.edits = []; S.rackMsg = ''; }
+  else S.rackMsg = `Not applied: ${m.error}`;
+  renderRack();
 }
 
 // ---- layout ----

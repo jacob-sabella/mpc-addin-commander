@@ -7,7 +7,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 B=build/host
 mkdir -p "$B"
-SRC="src/commander.c src/hook.c src/poll.c src/ws.c src/conf.c src/json.c src/daw.c src/project.c"
+SRC="src/commander.c src/hook.c src/poll.c src/ws.c src/conf.c src/json.c src/daw.c src/project.c src/rack.c"
 python3 tools/embed_web.py build/gen/web_assets.h
 VER="-DADDIN_VERSION=\"$(cat VERSION)\" -Ibuild/gen"
 W="-std=gnu11 -O1 -g -Wall -Wextra -Werror -fno-omit-frame-pointer $VER"
@@ -17,7 +17,7 @@ cc -std=gnu11 -O1 -g -Wall -Wextra -Werror -fPIC -shared -o "$B/fake_plugin.so" 
 for san in address,undefined thread; do
   name=${san%%,*}
   cc $W -fsanitize=$san -DHOOK_DLSYM=commander_dlsym -DHOST_DLSYM=commander_dlsym -DSTOCK_TEST_ROOT="\"$PWD/$B/stock\"" \
-    -o "$B/host_$name" tests/fake_host.c tests/fake_midi.c $SRC -ldl -lpthread
+    -rdynamic -o "$B/host_$name" tests/fake_host.c tests/fake_midi.c tests/fake_rack.c $SRC -ldl -lpthread
   rm -rf "$B/$name"; mkdir -p "$B/$name"; cp "$B/fake_plugin.so" "$B/$name/"
   SK="$B/stock/Test Vendor - MPC - Fake Verb/Plugin Skins"; rm -rf "$B/stock"; mkdir -p "$SK"
   printf '{"pageData":{}}' > "$SK/TUI.json"; printf 'png' > "$SK/knob.png"; printf 'secret' > "$B/stock/secret.txt"

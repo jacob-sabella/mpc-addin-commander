@@ -76,7 +76,32 @@ button { font: inherit; color: inherit; cursor: pointer; }
   padding: 4px 14px; font-size: 13px;
 }
 .chip:hover { border-color: var(--violet); }
+.chip + .chip, .chip.next { margin-left: 0; }
 
+#rack-body { padding: 0 14px 14px; font-size: 13px; }
+.rack-slot { margin: 0 0 12px; }
+.rack-slot h3 { margin: 0 0 4px; font-size: 12px; letter-spacing: .1em; text-transform: uppercase; color: var(--sub); font-weight: 600; }
+.rack-fx {
+  display: flex; align-items: center; gap: 6px; padding: 5px 8px; margin-bottom: 4px; border-radius: 6px;
+  background: var(--surface); border: 1px solid var(--line);
+}
+.rack-fx .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rack-fx.own { opacity: .65; }
+.rack-fx.gone .nm { text-decoration: line-through; color: var(--sub); }
+.rack-fx.new { border-color: var(--cyan); }
+.rack-fx .tag { font-size: 10px; color: var(--amber); }
+.rack-fx button, .rack-add button, .rack-bar button {
+  border: 1px solid var(--line); background: var(--surface2); border-radius: 5px; padding: 1px 8px; font-size: 12px;
+}
+.rack-fx button.on { border-color: var(--green); color: var(--green); }
+.rack-fx button:hover, .rack-add button:hover, .rack-bar button:hover { border-color: var(--violet); }
+.rack-add { display: flex; gap: 6px; }
+.rack-add select { flex: 1; min-width: 0; background: var(--surface); color: var(--text); border: 1px solid var(--line); border-radius: 5px; padding: 2px 4px; font: inherit; font-size: 12px; }
+.rack-bar { position: sticky; bottom: 0; padding: 8px 0 0; background: var(--bg2); }
+.rack-bar button { width: 100%; padding: 6px; font-size: 13px; }
+.rack-bar button.go { border-color: var(--pink); color: var(--pink); }
+.rack-bar button:disabled { opacity: .4; cursor: not-allowed; }
+.rack-msg { color: var(--amber); font-size: 12px; margin: 6px 0 0; }
 
 .main { flex: 1; display: flex; min-height: 0; }
 .side, .project {

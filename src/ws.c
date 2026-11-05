@@ -9,6 +9,7 @@
 #include "poll.h"
 #include "daw.h"
 #include "project.h"
+#include "rack.h"
 #include <dirent.h>
 #include "version.h"
 #include "web_assets.h"
@@ -266,10 +267,12 @@ static int bytes_of(const char *s, const struct jtok *t, int arr, uint8_t *out, 
     return t[arr].size;
 }
 
+#define MSG_TOKENS 640   // a rack_apply carries up to 32 edits
+
 static void handle_message(struct client *c, const char *s, size_t n)
 {
-    struct jtok t[64];
-    int nt = json_parse(s, n, t, 64);
+    struct jtok t[MSG_TOKENS];
+    int nt = json_parse(s, n, t, MSG_TOKENS);
     if (nt < 1 || t[0].type != J_OBJ) { send_error(c, "not a JSON object"); return; }
     char type[32];
     int ti = json_get(s, t, 0, "t");
@@ -315,6 +318,21 @@ static void handle_message(struct client *c, const char *s, size_t n)
     } else if (!strcmp(type, "project")) {
         struct sb b = { 0 };
         project_json(&b);
+        send_json(c, &b);
+    } else if (!strcmp(type, "rack")) {
+        struct sb b = { 0 };
+        rack_json(&b);
+        send_json(c, &b);
+    } else if (!strcmp(type, "rack_apply")) {
+        char why[200] = "";
+        char *copy = malloc(n + 1);
+        int r = -1;
+        if (!copy) snprintf(why, sizeof why, "out of memory");
+        else { memcpy(copy, s, n); copy[n] = 0; r = rack_apply(copy, why, sizeof why); free(copy); }
+        struct sb b = { 0 };
+        sb_printf(&b, "{\"t\":\"rack_result\",\"ok\":%s", r ? "false" : "true");
+        if (r) { sb_puts(&b, ",\"error\":"); sb_jstr(&b, why); }
+        sb_puts(&b, "}");
         send_json(c, &b);
     } else {
         send_error(c, "unknown message type");
@@ -685,6 +703,12 @@ static void handle(int fd)
         int r = project_json(&b);
         if (b.oom) reply_text(fd, "503 Service Unavailable", "out of memory");
         else reply(fd, r ? "404 Not Found" : "200 OK", "application/json", b.p, b.n);
+        sb_free(&b);
+    } else if (!strcmp(target, "/rack")) {
+        struct sb b = { 0 };
+        rack_json(&b);
+        if (b.oom) reply_text(fd, "503 Service Unavailable", "out of memory");
+        else reply(fd, "200 OK", "application/json", b.p, b.n);
         sb_free(&b);
     } else if (!strncmp(target, "/skin/", 6)) {
         serve_skin(fd, req, target + 6);

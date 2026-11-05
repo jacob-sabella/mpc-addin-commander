@@ -46,6 +46,19 @@ skin in `Synths/jacob-sabella - VST - NAM/`). `params` is complete and in VST in
 | `midi` | `bytes`: 1..256 integers | one MIDI message out of the addin's port into MPC: a channel message, a song position, a real-time byte or a whole sysex |
 | `surface` | `bytes`: 1..256 integers | appended as raw bytes to the control-surface injector file (`surface=` in the settings, `/data/midi.in` by default; an error when the file isn't there). The codes are the device's own: capture them with the injector's log |
 | `project` | | a `project` message: a snapshot of the most recent project file |
+| `rack` | | a `rack` message (below) |
+| `rack_apply` | `edits`: 1..32 objects | MPC Sample only. Hands the edits to the rack addin (mpc-addin-sample-rack), which stops MPC, edits the project's inserts and starts MPC again; the reply is `rack_result`, and the connection then drops while MPC restarts. Each edit: `{"op":"add","slot":"track:0","plugin":"Tuner"}`, `{"op":"remove","slot":"input","index":1,"name":"NAM"}` or `{"op":"enable","slot":"input","index":1,"name":"NAM","value":false}`. The rack addin checks all of it against the project first and refuses the whole request (one of each plugin per project, at most 4 inserts per channel, MPC's own effects are not changed, an insert that moved is not touched) |
+
+## The rack (MPC Sample)
+
+`rack` (also `GET /rack`): `{"t":"rack","available":true,"ok":true,"project":"...","applying":false,"max_inserts":4,"slots":[...],"plugins":[...]}`.
+A slot is a channel (`id` `input`, `output:N`, `submix:N` or `track:N`, a `label`) with its `fx`: `index` (the insert slot, 0..3), `enabled`, `vst`
+(false: one of MPC's own effects, shown but never changed) and `name`. `plugins` are the effect plugins MPC knows (`name`, `vendor`). Without the rack
+addin in the process, or with `rack=0`, it is `{"t":"rack","available":false,"reason":"..."}`; `ok:false` with an `error` means the project file
+couldn't be read. `rack_result`: `{"t":"rack_result","ok":true}` (MPC is going down for the edits) or `ok:false` with an `error`.
+
+The addin reaches the rack addin through the symbols it exports into MPC's process (`mpc_sample_rack_api`, `_state`, `_apply`): no extra socket.
+Adding, removing and switching a plugin means a restart of MPC, because MPC has no way to load or unload a plugin in a running project.
 
 ## The sequencer port and MPC's settings
 
@@ -96,6 +109,7 @@ control surface (`surface` with note 0x2A), the user picks Project on the MPC, a
 | `GET /info` | JSON: `version`, `protocol`, `plugins` (count), `clients` |
 | `GET /plugins` | the `plugins` message as a document, for scripts |
 | `GET /project` | the `project` message as a document |
+| `GET /rack` | the `rack` message as a document (read only; changes go over the WebSocket) |
 | `GET /skin/<id>/<path>` | a file from that plugin's `Plugin Skins/` folder (found as for `skin` above), read-only; `..` and symlinks out of the folder are refused; `ETag` is the file's size and mtime, `If-None-Match` gives 304 |
 | `GET /stock/<folder>/<path>` | a file from a stock plugin's `Plugin Skins/` folder, read-only. `<folder>` is `<vendor> - MPC - <name>` (URL-escaped), looked up in `/usr/share/Akai/Content/Synths`, `/storage/Synths`, `/sdcard/Synths`, `/media/az01-internal/Synths` and `/media/*/Synths`, the first with a `TUI.json`; a file the skin names but doesn't hold comes from `AIR Components` or `AKAI Components` beside it or in `/usr/share/Akai/Content/Synths`, as MPC finds it; a `<path>` of `../../<D>/<file>` is a definition file the skin imports, with `D` one of those shared folders, `Generic`, or another stock plugin's folder (then only under its `Plugin Skins/`); the same confinement and `ETag` as `/skin`. Akai's files stay on the device: the app caches them locally and never ships them |
 | `GET /` | the browser UI (`web/index.html`), or with `web=0` a short page naming the addin and its version |

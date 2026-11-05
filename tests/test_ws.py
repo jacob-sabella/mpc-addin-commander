@@ -101,8 +101,9 @@ def fail(msg):
     sys.exit(1)
 
 
+RACK_OUT = CONF + ".rack"
 host = subprocess.Popen([HOST], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=sys.stderr, text=True,
-                        env=dict(os.environ, MPC_COMMANDER_ADDIN_CONF=CONF, COMMANDER_FAKE_MIDI=MIDI), bufsize=1)
+                        env=dict(os.environ, MPC_COMMANDER_ADDIN_CONF=CONF, COMMANDER_FAKE_MIDI=MIDI, FAKE_RACK_OUT=RACK_OUT), bufsize=1)
 
 
 def cmd(line):
@@ -454,6 +455,27 @@ st, body, _ = get("/project")
 assert st == 404 and b"project file" in body, (st, body)   # zlib reads a plain file as is: no header
 print("ok   the project snapshot: tempo, sequence, tracks and plugins; a broken file is an error")
 
+# the MPC Sample rack, through the rack addin's exported symbols (tests/fake_rack.c stands in for it in the sanitizer hosts;
+# the preload run has no rack addin)
+if not FAKE_MIDI:
+    ws.send({"t": "rack"})
+    rk = ws.wait(lambda m: m["t"] == "rack")
+    assert rk == {"t": "rack", "available": False, "reason": "the MPC Sample rack addin isn't loaded"}, rk
+    print("ok   no rack addin in the process: the rack is unavailable, and says why")
+else:
+    ws.send({"t": "rack"})
+    rk = ws.wait(lambda m: m["t"] == "rack")
+    assert rk["available"] and rk["ok"] and rk["project"] == "Fake Project" and rk["max_inserts"] == 4, rk
+    assert rk["slots"][0]["fx"][1] == {"index": 1, "enabled": False, "vst": True, "name": "NAM"} and rk["plugins"][1]["name"] == "Tuner", rk
+    assert json.load(urllib.request.urlopen("http://127.0.0.1:%d/rack" % PORT)) == rk
+    edits = [{"op": "enable", "slot": "input", "index": 1, "name": "NAM", "value": True}] * 32
+    ws.send({"t": "rack_apply", "edits": edits})
+    assert ws.wait(lambda m: m["t"] == "rack_result") == {"t": "rack_result", "ok": True}
+    got = json.load(open(RACK_OUT))
+    assert got["t"] == "rack_apply" and len(got["edits"]) == 32, got   # all 32 edits reach the rack addin
+    ws.send({"t": "rack_apply", "edits": [{"op": "add", "slot": "refuse", "plugin": "Tuner"}]})
+    assert ws.wait(lambda m: m["t"] == "rack_result") == {"t": "rack_result", "ok": False, "error": "refused by the fake rack"}
+    print("ok   the MPC Sample rack: state over WebSocket and /rack, an apply with 32 edits, a refusal")
 
 if os.environ.get("STOCK_TEST"):   # Akai's own skins, read where they are installed (here the test root)
     F = "/stock/Test%20Vendor%20-%20MPC%20-%20Fake%20Verb/"
