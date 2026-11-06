@@ -52,7 +52,8 @@ instance whose name contains the text, `--page` a skin tab (0 is the first).
   drags vertically (its own height is the full range), a button sets its option, a toggle
   flips, all through `set`. Without a skin, the generic panel: a card per parameter with a knob
   arc for numeric values or the text and a chip per option the app has seen, each card
-  draggable.
+  draggable; or, with Compact, one row per parameter with a bar to click or drag (the choice
+  is kept per plugin in the config's `compact` list of uids).
 - Transport bar (once the addin sends `transport`): Play, Stop, Rec, Continue, the state, tempo,
   bar.beat.tick and the source, plus a button asking for a project snapshot.
 - Right (once `project` or `midi_in` arrives): the project's tracks with mute/solo, volume and

@@ -69,7 +69,8 @@ network can send it requests too.
 
 With the tunnel open, `http://localhost:6730/` is a control panel in any browser: transport buttons, the plugin list,
 each plugin's own MPC skin drawn on a canvas (pages as tabs; knobs and sliders drag, buttons click), generic parameter
-cards for plugins without a skin, and the project snapshot. It uses the same WebSocket and skin routes as the app and
+cards for plugins without a skin (or as compact rows: name, a bar to tap or drag, the value; the Compact / Cards button
+switches, and the browser remembers it per plugin), and the project snapshot. It uses the same WebSocket and skin routes as the app and
 works on a phone (`#<id>/<page>` in the URL links to a plugin page). The files are compiled into the addin: nothing to
 install beside it. It is on by default; set `web=0` in `mpc_commander_addin.conf` to turn it off (`/` then shows the
 short page and `/web/*` is 404; the WebSocket, `/info`, `/plugins`, `/project` and skin routes stay). Like the rest

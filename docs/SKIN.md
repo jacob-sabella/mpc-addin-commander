@@ -95,7 +95,9 @@ Picking an option sets the parameter; the plugin closes the popup itself.
 
 When a plugin ships no skin, or for a component the renderer does not know, draw from the parameter list alone:
 a grid of knobs with name, value arc and text, parameters whose text is one of a small set of strings as a
-segmented control, text-only readouts as labels.
+segmented control, text-only readouts as labels. Both clients also offer a compact form, chosen per plugin: one row per
+parameter with its name, a horizontal bar (click or drag sets the value where the pointer is) or the option chips, and
+the value text.
 
 ## Akai's stock plugins
 

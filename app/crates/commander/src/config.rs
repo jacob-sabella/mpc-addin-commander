@@ -1,6 +1,7 @@
-//! `~/.config/mpc-commander/config.toml`: the last host, and the window size.
+//! `~/.config/mpc-commander/config.toml`: the last host, the window size, and which plugins show compact parameters.
 
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeSet;
 use std::path::PathBuf;
 
 /// The on-disk configuration; every field has a default so a partial file loads.
@@ -13,6 +14,8 @@ pub struct Config {
     /// Connect to `host` when the app starts.
     pub connect_on_start: bool,
     pub window: Window,
+    /// Plugin uids whose generic panel shows compact rows instead of cards.
+    pub compact: BTreeSet<String>,
 }
 
 /// The window size in logical pixels.
@@ -39,6 +42,7 @@ impl Default for Config {
             port: commander_protocol::DEFAULT_PORT,
             connect_on_start: true,
             window: Window::default(),
+            compact: BTreeSet::new(),
         }
     }
 }
@@ -106,6 +110,7 @@ mod tests {
                 width: 800.0,
                 height: 600.0,
             },
+            compact: ["46616b65".to_string()].into(),
         };
         let text = toml::to_string_pretty(&c).unwrap();
         assert_eq!(toml::from_str::<Config>(&text).unwrap(), c);

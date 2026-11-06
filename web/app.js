@@ -14,7 +14,15 @@ const S = {
   sel: null, view: new Map(), // uid -> page index, or -1 for the parameter cards
   skins: new Map(),           // uid -> {state, skin, images, done, total, error}
   transport: null, drag: null, layout: null,
+  compact: loadCompact(),     // uids whose parameters show as compact rows instead of cards
 };
+
+function loadCompact() {
+  try { return new Set(JSON.parse(localStorage.getItem('commander.compact') || '[]')); } catch { return new Set(); }
+}
+function saveCompact() {
+  try { localStorage.setItem('commander.compact', JSON.stringify([...S.compact])); } catch { /* private window */ }
+}
 
 // ---- connection ----
 function connect() {
@@ -285,6 +293,7 @@ function render() {
   const inst = S.insts.get(S.sel);
   const canvas = $('skin'), generic = $('generic'), status = $('status'), tabs = $('tabs');
   status.textContent = '';
+  $('density').hidden = true;
   if (!inst) {
     canvas.hidden = generic.hidden = true;
     tabs.textContent = '';
@@ -307,6 +316,15 @@ function render() {
   if (page < 0) {
     canvas.hidden = true;
     generic.hidden = false;
+    const compact = S.compact.has(inst.plugin.uid);
+    const d = $('density');
+    d.hidden = false;
+    d.textContent = compact ? 'Cards' : 'Compact';
+    d.onclick = () => {
+      if (compact) S.compact.delete(inst.plugin.uid); else S.compact.add(inst.plugin.uid);
+      saveCompact();
+      render();
+    };
     renderGeneric(inst);
     if (sk && sk.state === 'failed') tip(`Skin failed (${sk.error}): showing the parameters`, 0);
     return;
@@ -525,15 +543,71 @@ function tip(text, ms) {
 // ---- generic panel: a card per parameter ----
 function renderGeneric(inst) {
   const box = $('generic');
-  if (S.genericFor !== inst.plugin.id) {
-    S.genericFor = inst.plugin.id;
+  const compact = S.compact.has(inst.plugin.uid);
+  const key = `${inst.plugin.id}|${compact}`;
+  if (S.genericFor !== key) {
+    S.genericFor = key;
     box.textContent = '';
+    box.classList.toggle('compact', compact);
     for (const p of inst.params.values()) {
       if (p.name.endsWith('__open')) continue;
-      box.append(card(inst, p.i));
+      box.append(compact ? compactRow(inst, p.i) : card(inst, p.i));
     }
   }
-  for (const el of box.children) updateCard(inst, el);
+  for (const el of box.children) (compact ? updateRow : updateCard)(inst, el);
+}
+
+// Compact: one short row per parameter, a horizontal bar that follows the pointer (tap or drag), or the option chips.
+function compactRow(inst, i) {
+  const el = document.createElement('div');
+  el.className = 'prow';
+  el.dataset.i = i;
+  el.innerHTML = '<div class="pname"></div><div class="pbar"><div class="pfill"></div></div><div class="chips"></div>' +
+    '<div class="ptext"></div>';
+  const bar = el.querySelector('.pbar');
+  const at = e => { const b = bar.getBoundingClientRect(); return (e.clientX - b.left) / Math.max(1, b.width); };
+  let dragging = false;
+  bar.addEventListener('pointerdown', e => {
+    dragging = true;
+    S.drag = { id: inst.plugin.id, param: i };
+    bar.setPointerCapture(e.pointerId);
+    setParam(inst.plugin.id, i, at(e));
+  });
+  bar.addEventListener('pointermove', e => { if (dragging) setParam(inst.plugin.id, i, at(e)); });
+  const end = () => { if (dragging) { dragging = false; S.drag = null; flush(); } };
+  bar.addEventListener('pointerup', end);
+  bar.addEventListener('pointercancel', end);
+  return el;
+}
+
+function updateRow(inst, el) {
+  const i = +el.dataset.i;
+  const p = inst.params.get(i);
+  if (!p) return;
+  const name = el.querySelector('.pname');
+  name.textContent = p.name;
+  name.title = `parameter ${i}: ${p.value.toFixed(3)}`;
+  const opts = p.text && !isNumeric(p.text)
+    ? [...(inst.options.get(i) || new Map())].sort((a, b) => a[1] - b[1]).slice(0, 8) : [];
+  const chips = el.querySelector('.chips');
+  const useChips = opts.length > 1;
+  el.querySelector('.pbar').style.display = useChips ? 'none' : '';
+  chips.style.display = useChips ? '' : 'none';
+  el.querySelector('.pfill').style.width = `${(Math.min(1, Math.max(0, p.value)) * 100).toFixed(1)}%`;
+  el.querySelector('.ptext').textContent = p.label ? `${p.text} ${p.label}` : p.text;
+  const key = opts.map(o => o[0]).join('\u0001') + '|' + p.value;
+  if (chips.dataset.key !== key) {
+    chips.dataset.key = key;
+    chips.textContent = '';
+    if (useChips)
+      for (const [text, value] of opts) {
+        const b = document.createElement('button');
+        b.textContent = text;
+        b.className = Math.abs(value - p.value) < 1e-4 ? 'cur' : '';
+        b.onclick = () => setParam(inst.plugin.id, i, value);
+        chips.append(b);
+      }
+  }
 }
 
 function card(inst, i) {
