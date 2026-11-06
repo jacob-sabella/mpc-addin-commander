@@ -225,6 +225,27 @@ static NO_SANITIZE void *dlsym_next(const char *name, void *caller)
     return NULL;
 }
 
+// The next addin after this one that exports dlsym (not libc's or libdl's), found once, at the first plugin lookup:
+// a plugin's entry is asked of it, so an addin that wraps plugins too (mpc-addin-sample-rack) sees them in either load
+// order. Not at start: the sanitizers' runtimes call dlsym before dlopen may be called.
+static dlsym_fn next_dlsym;
+static atomic_int next_known;
+static NO_SANITIZE dlsym_fn find_next_dlsym(void)
+{
+    if (atomic_load(&next_known)) return next_dlsym;
+    dlsym_fn found = NULL;
+    struct link_map *me = map_of((const void *)find_next_dlsym);
+    for (struct link_map *m = me ? me->l_next : NULL; m && !found; m = m->l_next) {
+        if (!m->l_name || strstr(m->l_name, "/libc.so") || strstr(m->l_name, "/libdl.so") || strstr(m->l_name, "/ld-linux")) continue;
+        void *sym = lookup_in(m, "dlsym");
+        if (sym && sym != (void *)real_dlsym && map_of(sym) == m) found = (dlsym_fn)sym;
+    }
+    next_dlsym = found;
+    atomic_store(&next_known, 1);
+    if (found) LOG("plugin lookups go on to %s too\n", map_of((void *)found)->l_name);
+    return found;
+}
+
 // The exported dlsym. The sanitizers' runtimes resolve their interceptors with dlsym(RTLD_NEXT) while they
 // initialise, before dlopen may be called, so the test builds export the hook under another name (HOOK_DLSYM) and
 // the fake host calls it; the real .so is tested preloaded, unsanitised.
@@ -235,11 +256,15 @@ __attribute__((visibility("default"))) NO_SANITIZE void *HOOK_DLSYM(void *handle
 {
     resolve();
     if (!real_dlsym) return NULL;
-    void *sym = handle == RTLD_NEXT ? dlsym_next(name, __builtin_return_address(0)) : real_dlsym(handle, name);
-    if (!sym || !atomic_load(&enabled) || (strcmp(name, "VSTPluginMain") && strcmp(name, "main")))
-        return sym;
+    if (handle == RTLD_NEXT) return dlsym_next(name, __builtin_return_address(0));
+    if (strcmp(name, "VSTPluginMain") && strcmp(name, "main")) return real_dlsym(handle, name);
+    dlsym_fn next = find_next_dlsym();
+    void *sym = next ? next(handle, name) : real_dlsym(handle, name);
+    if (!sym || !atomic_load(&enabled)) return sym;
+    // the plugin's own library (from its own entry: the next addin's trampoline lives in that addin)
+    void *own = real_dlsym(handle, name);
     Dl_info info;
-    if (!dladdr(sym, &info) || !info.dli_fname || !strstr(info.dli_fname, ".so")) return sym;   // not a plugin
+    if (!own || !dladdr(own, &info) || !info.dli_fname || !strstr(info.dli_fname, ".so")) return sym;   // not a plugin
     int m = module_for(info.dli_fname, (vst_entry)sym);
     if (m < 0) {
         LOG("%d plugin files already: %s stays unhooked\n", MAX_MODULES, info.dli_fname);

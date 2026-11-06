@@ -92,6 +92,15 @@ rm -rf "$B/real"; mkdir -p "$B/real"; cc -O2 -Wall -o "$B/real/MPC" tests/fake_h
 cp "$B/fake_plugin.so" "$B/real/"
 LD_PRELOAD="$PWD/$B/mpc_commander_addin.so" python3 tests/test_ws.py "$B/real/MPC" "$B/real/fake_plugin.so"
 echo "ok   preload: the exported dlsym hooks the plugin inside MPC"
+# ahead of another addin that wraps plugin entries (the MPC Sample rack): both wrap each plugin, and the plugin keeps its
+# own path (its skin is found)
+cc -std=gnu11 -O1 -Wall -Wextra -Werror -fPIC -shared -o "$B/next_hook.so" tests/next_hook.c -ldl
+rm -rf "$B/real2"; mkdir -p "$B/real2"; cp "$B/real/MPC" "$B/fake_plugin.so" "$B/real2/"   # a fresh folder: the run above leaves a skin
+LD_PRELOAD="$PWD/$B/mpc_commander_addin.so:$PWD/$B/next_hook.so" python3 tests/test_ws.py "$B/real2/MPC" "$B/real2/fake_plugin.so" 2>"$B/next.log" \
+  || { tail -20 "$B/next.log"; exit 1; }
+grep -q "plugin lookups go on to .*next_hook.so" "$B/next.log" && grep -q "next_hook: wrapped an instance" "$B/next.log" \
+  || { echo "FAIL the lookup didn't reach the next addin"; tail -20 "$B/next.log"; exit 1; }
+echo "ok   preload: ahead of another addin that wraps plugins, both wrap them"
 if [ -e /dev/snd/seq ] && command -v aconnect >/dev/null; then   # the real sequencer port, where this machine has one
   MPC_COMMANDER_ADDIN_CONF="$B/smoke.conf" LD_PRELOAD="$PWD/$B/mpc_commander_addin.so" "$B/MPC" 2>"$B/smoke.log" & P=$!
   for _ in $(seq 50); do check_port && break; sleep 0.1; done
