@@ -11,5 +11,7 @@ void rack_json(struct sb *b);
 // Apply edits ({"edits":[...]}, the rack addin's format): MPC is stopped, the project edited and MPC started again.
 // 0 when that has started, else -1 with the reason in why.
 int rack_apply(const char *json, char *why, size_t wn);
+// Turn a plugin MPC is running on or off now (rack addin 0.3.0 and later), until MPC restarts. 0, or -1 with the reason.
+int rack_live(const char *slot, int index, const char *name, int on, char *why, size_t wn);
 
 #endif

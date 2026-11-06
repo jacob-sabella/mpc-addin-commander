@@ -91,6 +91,7 @@ function onMessage(m) {
     case 'project': renderProject(m); break;
     case 'rack': S.rack = m; $('rack-btn').hidden = !m.available; renderRack(); break;
     case 'rack_result': rackResult(m); break;
+    case 'rack_live_result': S.rackMsg = `Not switched: ${m.error}`; renderRack(); break;
     case 'pong': S.rtt = Math.round(performance.now() - S.pingAt); conn('up'); break;
     case 'error': tip(`The addin says: ${m.msg}`, 5000); if ($('project-body').dataset.wait) renderProjectError(m.msg); break;
   }
@@ -680,7 +681,8 @@ function renderProject(m) {
   body.append(note);
 }
 
-// ---- the MPC Sample rack: add / remove / turn off plugins (the rack addin edits the project and restarts MPC) ----
+// ---- the MPC Sample rack: add / remove / turn off plugins (the rack addin edits the project and restarts MPC; a plugin
+// MPC is running turns on and off at once, until MPC restarts, and Apply writes those OFFs into the project) ----
 // Edits queue here, shown as pending, and go out together on Apply (two clicks: it restarts MPC).
 S.rack = null; S.edits = []; S.rackMsg = ''; S.rackApplying = false; S.rackConfirm = 0;
 $('rack-btn').onclick = () => {
@@ -711,6 +713,14 @@ function toggleEdit(op, slot, f, value) {
   S.rackConfirm = 0; S.rackMsg = '';
   renderRack();
 }
+// the edits Apply sends: the queued ones, and an OFF for each plugin that is off live and not already in them
+const liveOffs = () => {
+  const out = [];
+  for (const s of S.rack.slots) for (const f of s.fx)
+    if (f.vst && f.live === 'off' && findEdit('remove', s.id, f.index, f.name) < 0 && findEdit('enable', s.id, f.index, f.name) < 0)
+      out.push({ op: 'enable', slot: s.id, index: f.index, name: f.name, value: false });
+  return out;
+};
 function renderRack() {
   const body = $('rack-body');
   body.textContent = '';
@@ -727,16 +737,19 @@ function renderRack() {
     for (const f of s.fx) {
       const gone = findEdit('remove', s.id, f.index, f.name) >= 0;
       const en = findEdit('enable', s.id, f.index, f.name);
-      const on = en >= 0 ? S.edits[en].value : f.enabled;
+      const live = f.vst && f.live && en < 0 && !gone;   // MPC is running it: on/off now
+      const on = en >= 0 ? S.edits[en].value : live ? f.live === 'on' : f.enabled;
       const row = el('div', 'rack-fx' + (f.vst ? '' : ' own') + (gone ? ' gone' : ''));
       row.append(el('span', 'nm', f.name));
       if (!f.vst) row.append(el('span', 'tag', 'MPC'));
       else {
         if (en >= 0 && !gone) row.append(el('span', 'tag', 'pending'));
+        if (live && !on) row.append(el('span', 'tag', 'off until restart'));
         const t = el('button', on ? 'on' : '', on ? 'ON' : 'OFF');
         t.disabled = gone;
-        t.title = 'Turn this plugin on or off (applied with the rest)';
-        t.onclick = () => toggleEdit('enable', s.id, f, !on);
+        t.title = live ? 'Turn this plugin on or off now (until MPC restarts; Apply keeps it off)' : 'Turn this plugin on or off (applied with the rest)';
+        t.onclick = live ? () => { S.rackMsg = ''; send({ t: 'rack_live', slot: s.id, index: f.index, name: f.name, on: !on }); }
+                         : () => toggleEdit('enable', s.id, f, !on);
         const x = el('button', '', gone ? 'undo' : 'remove');
         x.onclick = () => toggleEdit('remove', s.id, f);
         row.append(t, x);
@@ -764,8 +777,9 @@ function renderRack() {
     body.append(box);
   }
   const bar = el('div', 'rack-bar');
-  const go = el('button', S.rackConfirm ? 'go' : '', S.rackConfirm ? 'Restart MPC and apply' : `Apply ${S.edits.length} change${S.edits.length === 1 ? '' : 's'}`);
-  go.disabled = !S.edits.length;
+  const offs = liveOffs(), count = S.edits.length + offs.length;
+  const go = el('button', S.rackConfirm ? 'go' : '', S.rackConfirm ? 'Restart MPC and apply' : `Apply ${count} change${count === 1 ? '' : 's'}`);
+  go.disabled = !count;
   go.onclick = () => {
     if (!S.rackConfirm) {
       S.rackConfirm = Date.now();
@@ -777,7 +791,7 @@ function renderRack() {
     S.rackMsg = 'Sending…';
     const edits = S.edits.map(e => e.op === 'add' ? { op: 'add', slot: e.slot, plugin: e.plugin }
       : e.op === 'remove' ? { op: 'remove', slot: e.slot, index: e.index, name: e.name }
-      : { op: 'enable', slot: e.slot, index: e.index, name: e.name, value: e.value });
+      : { op: 'enable', slot: e.slot, index: e.index, name: e.name, value: e.value }).concat(offs);
     send({ t: 'rack_apply', edits });
     renderRack();
   };

@@ -466,7 +466,8 @@ else:
     ws.send({"t": "rack"})
     rk = ws.wait(lambda m: m["t"] == "rack")
     assert rk["available"] and rk["ok"] and rk["project"] == "Fake Project" and rk["max_inserts"] == 4, rk
-    assert rk["slots"][0]["fx"][1] == {"index": 1, "enabled": False, "vst": True, "name": "NAM"} and rk["plugins"][1]["name"] == "Tuner", rk
+    assert rk["slots"][0]["fx"][1] == {"index": 1, "enabled": False, "vst": True, "name": "NAM", "live": None} and rk["plugins"][1]["name"] == "Tuner", rk
+    assert rk["slots"][0]["fx"][2]["live"] == "on", rk
     assert json.load(urllib.request.urlopen("http://127.0.0.1:%d/rack" % PORT)) == rk
     edits = [{"op": "enable", "slot": "input", "index": 1, "name": "NAM", "value": True}] * 32
     ws.send({"t": "rack_apply", "edits": edits})
@@ -475,7 +476,17 @@ else:
     assert got["t"] == "rack_apply" and len(got["edits"]) == 32, got   # all 32 edits reach the rack addin
     ws.send({"t": "rack_apply", "edits": [{"op": "add", "slot": "refuse", "plugin": "Tuner"}]})
     assert ws.wait(lambda m: m["t"] == "rack_result") == {"t": "rack_result", "ok": False, "error": "refused by the fake rack"}
-    print("ok   the MPC Sample rack: state over WebSocket and /rack, an apply with 32 edits, a refusal")
+    ws.send({"t": "rack_live", "slot": "input", "index": 2, "name": "Tuner", "on": False})
+    rk = ws.wait(lambda m: m["t"] == "rack")
+    assert rk["slots"][0]["fx"][2]["live"] == "off", rk
+    ws.send({"t": "rack_live", "slot": "input", "index": 1, "name": "NAM", "on": True})
+    assert ws.wait(lambda m: m["t"] == "rack_live_result") == {"t": "rack_live_result", "ok": False, "error": "MPC isn't running NAM"}
+    assert ws.wait(lambda m: m["t"] == "rack")["slots"][0]["fx"][2]["live"] == "off"
+    ws.send({"t": "rack_live", "slot": "input", "index": 2, "name": "Tuner", "on": True})
+    assert ws.wait(lambda m: m["t"] == "rack")["slots"][0]["fx"][2]["live"] == "on"
+    ws.send({"t": "rack_live", "slot": "input"})
+    assert ws.wait(lambda m: m["t"] == "rack_live_result")["error"] == "rack_live needs slot, index, name and on"
+    print("ok   the MPC Sample rack: state over WebSocket and /rack, an apply with 32 edits, a refusal, live on/off")
 
 if os.environ.get("STOCK_TEST"):   # Akai's own skins, read where they are installed (here the test root)
     F = "/stock/Test%20Vendor%20-%20MPC%20-%20Fake%20Verb/"

@@ -334,6 +334,25 @@ static void handle_message(struct client *c, const char *s, size_t n)
         if (r) { sb_puts(&b, ",\"error\":"); sb_jstr(&b, why); }
         sb_puts(&b, "}");
         send_json(c, &b);
+    } else if (!strcmp(type, "rack_live")) {   // {"t":"rack_live","slot":..,"index":..,"name":..,"on":bool}: then the rack again
+        char slot[32], name[64], why[200] = "";
+        double idx;
+        int on, ks = json_get(s, t, 0, "slot"), ki = json_get(s, t, 0, "index"), kn = json_get(s, t, 0, "name"), ko = json_get(s, t, 0, "on");
+        int r = -1;
+        if (ks < 0 || ki < 0 || kn < 0 || ko < 0 || json_str(s, t, ks, slot, sizeof slot) || json_num(s, t, ki, &idx) ||
+            json_str(s, t, kn, name, sizeof name) || json_bool(s, t, ko, &on))
+            snprintf(why, sizeof why, "rack_live needs slot, index, name and on");
+        else r = rack_live(slot, (int)idx, name, on, why, sizeof why);
+        struct sb b = { 0 };
+        if (r) {
+            sb_puts(&b, "{\"t\":\"rack_live_result\",\"ok\":false,\"error\":");
+            sb_jstr(&b, why);
+            sb_puts(&b, "}");
+            send_json(c, &b);
+            b = (struct sb){ 0 };
+        }
+        rack_json(&b);
+        send_json(c, &b);
     } else {
         send_error(c, "unknown message type");
     }

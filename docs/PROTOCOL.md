@@ -47,6 +47,7 @@ skin in `Synths/jacob-sabella - VST - NAM/`). `params` is complete and in VST in
 | `surface` | `bytes`: 1..256 integers | appended as raw bytes to the control-surface injector file (`surface=` in the settings, `/data/midi.in` by default; an error when the file isn't there). The codes are the device's own: capture them with the injector's log |
 | `project` | | a `project` message: a snapshot of the most recent project file |
 | `rack` | | a `rack` message (below) |
+| `rack_live` | `slot`, `index`, `name`, `on` | MPC Sample, rack addin 0.3.0+: a running plugin on or off now (below) |
 | `rack_apply` | `edits`: 1..32 objects | MPC Sample only. Hands the edits to the rack addin (mpc-addin-sample-rack), which stops MPC, edits the project's inserts and starts MPC again; the reply is `rack_result`, and the connection then drops while MPC restarts. Each edit: `{"op":"add","slot":"track:0","plugin":"Tuner"}`, `{"op":"remove","slot":"input","index":1,"name":"NAM"}` or `{"op":"enable","slot":"input","index":1,"name":"NAM","value":false}`. The rack addin checks all of it against the project first and refuses the whole request (one of each plugin per project, at most 4 inserts per channel, MPC's own effects are not changed, an insert that moved is not touched) |
 
 ## The rack (MPC Sample)
@@ -57,7 +58,14 @@ A slot is a channel (`id` `input`, `output:N`, `submix:N` or `track:N`, a `label
 addin in the process, or with `rack=0`, it is `{"t":"rack","available":false,"reason":"..."}`; `ok:false` with an `error` means the project file
 couldn't be read. `rack_result`: `{"t":"rack_result","ok":true}` (MPC is going down for the edits) or `ok:false` with an `error`.
 
-The addin reaches the rack addin through the symbols it exports into MPC's process (`mpc_sample_rack_api`, `_state`, `_apply`): no extra socket.
+With rack addin 0.3.0 or later (its interface 2) each insert also has `live`: `"on"` or `"off"` while MPC is running that plugin, else `null`.
+`rack_live` (`slot`, `index`, `name`, `on`) turns such a plugin on or off at once, without a restart, until MPC restarts: the reply is the
+`rack` message again, after a `rack_live_result` (`ok:false` with an `error`) when it was refused. An apply writes the live OFFs into the
+project with the edits; the browser UI also sends them as `enable` edits, so they alone make an apply.
+
+The addin reaches the rack addin through the symbols it exports into MPC's process (`mpc_sample_rack_api`, `_state`, `_apply`, `_live`): no
+extra socket. Both addins wrap plugins through `dlsym`; each hands a plugin's entry lookup on to the next addin that exports `dlsym`, so they
+work together in either preload order.
 Adding, removing and switching a plugin means a restart of MPC, because MPC has no way to load or unload a plugin in a running project.
 
 ## The sequencer port and MPC's settings
