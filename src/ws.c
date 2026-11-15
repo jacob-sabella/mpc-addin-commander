@@ -450,9 +450,19 @@ static int has_tui(const char *dir)
     return stat(p, &st) == 0 && S_ISREG(st.st_mode);
 }
 
+static int is_file(const char *dir, const char *name)
+{
+    char p[1300];
+    snprintf(p, sizeof p, "%s/%s", dir, name);
+    struct stat st;
+    return stat(p, &st) == 0 && S_ISREG(st.st_mode);
+}
+
 // A plugin's Plugin Skins folder: next to its .so, else the one MPC finds by name, "<vendor> - VST - <product>" in the
 // same Synths folder as the .so's own folder (a .so loaded from /storage/Synths/NAM/ gets its skin from
-// /storage/Synths/jacob-sabella - VST - NAM/). -1 when neither has a TUI.json.
+// /storage/Synths/jacob-sabella - VST - NAM/), else the plugin folder of the SDK layout: the first folder at or above
+// the .so's (four at most) that holds plugin.json, as the SDK's own resolver finds it ("<Mfr> - VST - <Name>/VST/x.so"
+// has its Plugin Skins at the folder root). -1 when none has a TUI.json.
 static int skin_dir(const char *so, const char *vendor, const char *product, char *out, size_t n)
 {
     const char *slash = strrchr(so, '/');
@@ -461,10 +471,26 @@ static int skin_dir(const char *so, const char *vendor, const char *product, cha
     if (has_tui(out)) return 0;
     const char *up = slash;
     while (up > so && up[-1] != '/') up--;
-    if (up == so || !vendor[0] || !product[0] || strchr(vendor, '/') || strchr(product, '/') ||
-        !strcmp(vendor, "..") || !strcmp(product, "..")) return -1;
-    snprintf(out, n, "%.*s%s - VST - %s/Plugin Skins", (int)(up - so), so, vendor, product);
-    return has_tui(out) ? 0 : -1;
+    if (up != so && vendor[0] && product[0] && !strchr(vendor, '/') && !strchr(product, '/') &&
+        strcmp(vendor, "..") && strcmp(product, "..")) {
+        snprintf(out, n, "%.*s%s - VST - %s/Plugin Skins", (int)(up - so), so, vendor, product);
+        if (has_tui(out)) return 0;
+    }
+    char d[512];
+    size_t len = (size_t)(slash - so);
+    if (len >= sizeof d) return -1;
+    memcpy(d, so, len);
+    d[len] = 0;
+    for (int level = 0; level < 4 && d[0]; level++) {
+        if (is_file(d, "plugin.json")) {
+            snprintf(out, n, "%s/Plugin Skins", d);
+            return has_tui(out) ? 0 : -1;
+        }
+        char *s = strrchr(d, '/');
+        if (!s) break;
+        *s = 0;   // "/x" -> "" (the root has no plugin.json worth reading)
+    }
+    return -1;
 }
 
 int ws_skin_exists(const char *so, const char *vendor, const char *product)

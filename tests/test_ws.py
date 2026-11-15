@@ -255,6 +255,50 @@ ws.send({"t": "list"})
 assert not ws.wait(lambda m: m["t"] == "plugins")["plugins"][0]["skin"]
 print("ok   a skin found by name beside the plugin's folder, as MPC finds it")
 
+# /skin in the SDK layout: "<root>/VST2 Plugins/<Mfr> - VST - <Name>/VST/x.so", with plugin.json and Plugin Skins at the
+# folder root; the walk up from the .so stops at the first plugin.json, and without one nothing is found
+sdk = os.path.join(DIR, "sdk_tree")
+shutil.rmtree(sdk, ignore_errors=True)
+pdir = os.path.join(sdk, "VST2 Plugins", "Test - VST - Fake")
+os.makedirs(os.path.join(pdir, "VST"))
+os.makedirs(os.path.join(pdir, "Plugin Skins"))
+sdk_so = os.path.join(pdir, "VST", "fake-arm32.so")
+shutil.copy(PLUGIN, sdk_so)
+open(os.path.join(pdir, "Plugin Skins", "TUI.json"), "w").write('{"sdk": 1}')
+def skin_listed(path):
+    n = int(cmd("load " + path).split()[1])
+    added = ws.wait(lambda m: m["t"] == "plugin_added")["plugin"]
+    st = None
+    try:
+        urllib.request.urlopen("http://127.0.0.1:%d/skin/%d/TUI.json" % (PORT, added["id"])).read()
+        st = 200
+    except urllib.error.HTTPError as e:
+        st = e.code
+    cmd("close %d" % n)
+    ws.wait(lambda m: m["t"] == "plugin_removed")
+    assert added["skin"] == (st == 200), (added["skin"], st)
+    return added["skin"]
+assert not skin_listed(sdk_so), "no plugin.json: the SDK probe must not apply"
+open(os.path.join(pdir, "plugin.json"), "w").write("{}")
+assert skin_listed(sdk_so), "SDK layout: Plugin Skins at the plugin.json folder"
+# wrapper layout (the .so at the folder root) and sibling layout still resolve first, ahead of the walk
+wrap = os.path.join(sdk, "wrap"); os.makedirs(os.path.join(wrap, "Plugin Skins"))
+open(os.path.join(wrap, "Plugin Skins", "TUI.json"), "w").write('{"w": 1}')
+shutil.copy(PLUGIN, os.path.join(wrap, "fake.so"))
+assert skin_listed(os.path.join(wrap, "fake.so"))
+sib = os.path.join(sdk, "sib"); os.makedirs(os.path.join(sib, "x"))
+shutil.copy(PLUGIN, os.path.join(sib, "x", "fake.so"))
+assert not skin_listed(os.path.join(sib, "x", "fake.so"))
+sibskin = os.path.join(sib, "mpc-addin-commander tests - VST - Fake Synth", "Plugin Skins"); os.makedirs(sibskin)
+open(os.path.join(sibskin, "TUI.json"), "w").write('{"s": 1}')
+assert skin_listed(os.path.join(sib, "x", "fake.so"))
+# too deep (five folders under the plugin.json folder): not found
+deep = os.path.join(pdir, "a", "b", "c", "d", "e"); os.makedirs(deep)
+shutil.copy(PLUGIN, os.path.join(deep, "fake.so"))
+assert not skin_listed(os.path.join(deep, "fake.so"))
+shutil.rmtree(sdk)
+print("ok   a skin found by the SDK plugin folder (plugin.json, up to four folders up), wrapper and sibling layouts, none without plugin.json")
+
 skin = os.path.join(os.path.dirname(PLUGIN), "Plugin Skins")
 os.makedirs(os.path.join(skin, "sub"), exist_ok=True)
 open(os.path.join(skin, "TUI.json"), "w").write('{"x": 1}')

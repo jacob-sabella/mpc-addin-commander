@@ -1,7 +1,7 @@
 // A plugin host for the offline tests, loading plugins the way MPC's does (dlopen, dlsym("VSTPluginMain"), a static
 // host callback that finds the instance through resvd2, effOpen, effSetSampleRate, processReplacing on a worker
 // thread), driven by commands on stdin from tests/test_ws.py:
-//   load <so>            -> "loaded <n>"        set <n> <i> <v>      -> "ok"
+//   load <so> (to the end of the line)         -> "loaded <n>"        set <n> <i> <v>      -> "ok"
 //   get <n> <i>          -> "<value>"           engine <n> <i> <v>   -> "ok" (the plugin changes it itself)
 //   close <n>            -> "ok"                next <n>             -> "1" when the plugin's RTLD_NEXT is right
 //   quit
@@ -66,7 +66,7 @@ int main(void)
         float v;
         if (sscanf(line, "%15s", cmd) != 1) continue;
         if (!strcmp(cmd, "quit")) break;
-        if (!strcmp(cmd, "load") && sscanf(line, "%*s %899s", path) == 1) {
+        if (!strcmp(cmd, "load") && sscanf(line, "%*s %899[^\n]", path) == 1) {
             int k = 0;
             while (k < MAX && slots[k].in_use) k++;
             if (k == MAX) { puts("error full"); continue; }

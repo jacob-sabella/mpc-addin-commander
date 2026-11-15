@@ -32,7 +32,8 @@ A plugin object:
 
 `id` is unique for the life of the MPC process (never reused). `skin` says whether the plugin has a `Plugin Skins/TUI.json`: in the folder of `so`, else in
 `<vendor> - VST - <product>/` beside that folder, where MPC finds it by name (a `.so` loaded from `Synths/NAM/` with its
-skin in `Synths/jacob-sabella - VST - NAM/`). `params` is complete and in VST index order.
+skin in `Synths/jacob-sabella - VST - NAM/`), else in the plugin folder of the SDK layout (the first folder at or above the `.so`'s, four at most, that holds a
+`plugin.json`, for `<Mfr> - VST - <Name>/VST/x.so`). `params` is complete and in VST index order.
 
 ## Client to server
 
